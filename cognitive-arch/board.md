@@ -2,7 +2,7 @@
 # Format: one row per agent. See _syntax.md for vocabulary.
 # When real agents start, replace placeholder row with live rows.
 
-agent:implementer b:111 group:17C status:done lock:ready deps:- ts:2026-05-28 last_done:block-111
+agent:implementer b:112 group:17C status:done lock:ready deps:- ts:2026-05-28 last_done:block-112
 agent:master b:- group:- status:idle lock:ready deps:- ts:2026-05-27
 
 # Example rows (delete when first real agent is created):

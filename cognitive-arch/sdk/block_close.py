@@ -103,6 +103,32 @@ def _check_actual_hours(arch_root: Path, block_id: str) -> bool | None:
     return m is not None
 
 
+def _check_tok_actual(arch_root: Path, block_id: str, force: bool = False) -> tuple[bool, str]:
+    """Check tok_actual field presence in retro. Returns (ok, message).
+
+    Returns (True, '') if field is present and non-empty.
+    Returns (False, msg) if missing, empty, or null — unless force=True.
+    Returns (True, 'no_retro') if no retro file found (handled by _check_retro).
+    """
+    import re
+    retros = list((arch_root / "blocks").glob(f"{block_id}-*.md"))
+    retros = [r for r in retros if "LOG" not in r.name.upper()]
+    if not retros:
+        return (True, "no_retro")
+    text = retros[0].read_text(encoding="utf-8", errors="replace")
+    # Accept: tok_actual, tok-actual, tokens_actual variants
+    pattern = r"^(?:tok_actual|tok-actual|tokens_actual):\s*(.+)"
+    m = re.search(pattern, text, re.MULTILINE)
+    if not m:
+        msg = f"WARN: tok_actual missing in retro for {block_id}. Add tok_actual field or use --force."
+        return (False, msg)
+    value = m.group(1).strip()
+    if value.lower() in ("", "null", "~", "none"):
+        msg = f"WARN: tok_actual is null/empty in retro for {block_id}. Set actual token count or use --force."
+        return (False, msg)
+    return (True, "")
+
+
 # ---------------------------------------------------------------------------
 # Main close function
 # ---------------------------------------------------------------------------
@@ -152,6 +178,18 @@ def close_block(
         results["hours_check"] = "no_retro"
     else:
         results["hours_check"] = "ok"
+
+    # tok_actual check (Phase 18 — mandatory token tracking)
+    tok_ok, tok_msg = _check_tok_actual(arch_root, block_id, force)
+    if not tok_ok:
+        print(f"  {tok_msg}")
+        results["tok_actual_check"] = "missing"
+        if not force:
+            print(f"  HALT: Use --force to bypass tok_actual check.")
+            results["halted"] = True
+            return results
+    else:
+        results["tok_actual_check"] = tok_msg if tok_msg == "no_retro" else "ok"
 
     # Manifest meta
     meta = _read_manifest_meta(arch_root, block_id)

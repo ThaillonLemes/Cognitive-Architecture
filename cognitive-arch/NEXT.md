@@ -2,4 +2,5 @@
 
 
 
-status:project-complete next_action:none phase:- manifest:- group:- note:phase-17-closed_all-phases-done_no-next-phase-planned last_updated:2026-05-28
+
+status:active next_action:block-113 phase:phase-18 manifest:manifests/block-113-*.md group:- note:phase-17-closed_all-phases-done_no-next-phase-planned last_updated:2026-05-28
