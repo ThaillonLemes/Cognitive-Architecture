@@ -389,8 +389,35 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    import io as _io
+
     parser = argparse.ArgumentParser(description="cognitive-arch session initializer")
     parser.add_argument("--arch-root", default=".", help="Path to cognitive-arch root")
     parser.add_argument("--force", action="store_true", help="Force run all tools regardless of freshness")
+    parser.add_argument("--validate-ux", action="store_true", help="Run ux_validator on session output after summary")
     args = parser.parse_args()
-    run_session_start(Path(args.arch_root).resolve(), force=args.force)
+    arch = Path(args.arch_root).resolve()
+
+    if args.validate_ux:
+        buf = _io.StringIO()
+        _orig_stdout = sys.stdout
+        sys.stdout = buf
+        try:
+            run_session_start(arch, force=args.force)
+        finally:
+            sys.stdout = _orig_stdout
+        output = buf.getvalue()
+        print(output, end="")
+        try:
+            sys.path.insert(0, str(arch / "sdk"))
+            from ux_validator import UxValidator
+            v = UxValidator.from_ux_voice(arch)
+            violations = v.check(output)
+            if violations:
+                print(f"\n[ux_validator] {len(violations)} violation(s) in session output:")
+                for viol in violations[:10]:
+                    print(f"  WARN L{viol.line_num}: {viol.message}")
+        except Exception:
+            pass
+    else:
+        run_session_start(arch, force=args.force)

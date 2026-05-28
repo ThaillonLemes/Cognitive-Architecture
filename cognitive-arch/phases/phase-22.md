@@ -1,6 +1,6 @@
 ---
 id: phase-22
-status: planned
+status: done
 prev_phase: phase-21
 exit_criteria_count: 5
 blocks_count: 5
