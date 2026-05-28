@@ -13,7 +13,7 @@ status: planned                       # planned | active | complete
 prev_phase: phase-<N-1>               # or "none" if first
 exit_criteria_count: <number>
 blocks_count: <number>
-estimated_duration_days: <number>     # optional
+estimated_duration_minutes: <number>  # optional; Tier S≈15min, Tier M≈40min
 created_at: YYYY-MM-DD
 last_updated: YYYY-MM-DD
 owner: <agent or human>

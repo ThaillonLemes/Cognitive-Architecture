@@ -8,7 +8,7 @@
 # mutable_by: master (last_run field only; structural changes require a block)
 
 schema_version: "1.0"
-generated_at: "2026-05-27"
+generated_at: "2026-05-28"
 timezone: America/Sao_Paulo
 
 tools:

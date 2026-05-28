@@ -4,7 +4,7 @@ status: planned
 prev_phase: phase-19
 exit_criteria_count: 5
 blocks_count: 5
-estimated_duration_days: 3
+estimated_duration_minutes: 125
 created_at: 2026-05-28
 last_updated: 2026-05-28
 owner: implementer
