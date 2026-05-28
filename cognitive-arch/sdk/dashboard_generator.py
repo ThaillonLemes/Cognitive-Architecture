@@ -355,6 +355,55 @@ def generate_dashboard(
     )
 
 
+def _render_adr_widget(index_path: "Path | None") -> str:
+    """Render the ADR widget HTML from governance/adrs/index.md.
+
+    Shows: total ADRs, last ADR date, count by status.
+    """
+    from pathlib import Path as _Path
+    if index_path is None or not _Path(str(index_path)).exists():
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Architecture Decisions (ADRs)</h2>'
+            '<p style="color:var(--text-dim)">ADR index not found &mdash; '
+            'run <code>python sdk/adr_drafter.py --rebuild-index --arch-root .</code></p>'
+            '</div>'
+        )
+
+    import re as _re
+    text = _Path(str(index_path)).read_text(encoding="utf-8", errors="replace")
+
+    # Parse table rows: | date | [title](path) | status |
+    rows = _re.findall(r"^\|\s*(\S+)\s*\|\s*\[([^\]]+)\]\([^)]+\)\s*\|\s*(\S+)\s*\|", text, _re.MULTILINE)
+    if not rows:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Architecture Decisions (ADRs)</h2>'
+            '<p style="color:var(--text-dim)">No ADRs recorded yet.</p>'
+            '</div>'
+        )
+
+    total = len(rows)
+    last_date = max(r[0] for r in rows)
+    status_counts: dict[str, int] = {}
+    for _, _, status in rows:
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    status_badges = " ".join(
+        f'<span class="badge badge-planned" style="margin-right:.3rem">'
+        f'{s}: {c}</span>'
+        for s, c in sorted(status_counts.items())
+    )
+
+    return (
+        '<div class="card card-teal">'
+        '<h2>Architecture Decisions (ADRs)</h2>'
+        f'<p>Total ADRs: <strong>{total}</strong> &nbsp;|&nbsp; Last: <strong>{last_date}</strong></p>'
+        f'<p>{status_badges}</p>'
+        '</div>'
+    )
+
+
 def _render_token_widget(
     records: list | None,
     budget: int | None = None,
@@ -578,6 +627,9 @@ def render_html(data: DashboardData, css: Optional[str] = None) -> str:
       {roadmap}
     </div>
   </div>
+
+  <!-- ADR Widget -->
+  {_render_adr_widget(getattr(data, "adr_index_path", None))}
 
   <!-- Token Widget -->
   {_render_token_widget(getattr(data, "token_records", None), getattr(data, "token_budget", None))}

@@ -311,16 +311,41 @@ def synthesize(
 def write_design_doc(
     output: SynthesisOutput,
     arch_root: Optional[str] = None,
+    decisions: Optional[list] = None,
+    no_adr: bool = False,
 ) -> Path:
     """
     Write the synthesized design document to design/<topic>.md.
     Creates the design/ directory if it doesn't exist.
     Returns the output path.
+
+    If `decisions` is provided and `no_adr` is False, calls adr_drafter.generate()
+    for decisions with significance:high or significance:medium after writing the doc.
+    Import failure of adr_drafter never blocks synthesis (try/except).
     """
     root = _arch_path(arch_root)
     out_path = root / output.design_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(output.content, encoding="utf-8")
+
+    # Post-synthesis ADR trigger (Phase 19)
+    if decisions and not no_adr:
+        try:
+            import sys as _sys
+            _sdk = str(Path(__file__).parent)
+            if _sdk not in _sys.path:
+                _sys.path.insert(0, _sdk)
+            from adr_drafter import AdrDrafter
+            # Attach synthesis_source to each decision that lacks it
+            for d in decisions:
+                if not d.get("synthesis_source"):
+                    d["synthesis_source"] = output.design_path
+            created = AdrDrafter(root).generate(decisions)
+            if created:
+                print(f"  [synthesis] {len(created)} ADR draft(s) created in design/adrs/")
+        except Exception:
+            pass  # ADR failure must never block synthesis
+
     return out_path
 
 
@@ -338,6 +363,7 @@ if __name__ == "__main__":
     parser.add_argument("--answers-json", default=None,
                         help="JSON string or file path: {question_id: answer_text}")
     parser.add_argument("--stdout", action="store_true", help="Print to stdout instead of writing file")
+    parser.add_argument("--no-adr", action="store_true", help="Disable automatic ADR draft generation")
     args = parser.parse_args()
 
     # Demo mode with empty answers
@@ -362,6 +388,6 @@ if __name__ == "__main__":
     if args.stdout:
         print(result.content)
     else:
-        path = write_design_doc(result, arch_root=args.arch_root)
+        path = write_design_doc(result, arch_root=args.arch_root, no_adr=args.no_adr)
         print(f"Design doc written: {path}")
         print(f"Questions: {result.questions_total} | Answered: {result.questions_answered} | Accepted: {result.questions_accepted}")
