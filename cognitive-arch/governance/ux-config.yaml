@@ -1,0 +1,18 @@
+# governance/ux-config.yaml
+# UX configuration for dashboard and AI output formatting.
+# Read by sdk/dashboard_generator.py and sdk/ux_validator.py.
+
+# Dashboard link protocol: file | vscode
+# file:// — opens in OS default file handler (browser, Finder, Explorer)
+# vscode:// — opens directly in VS Code (requires VS Code URI handler)
+dashboard_link_protocol: file
+
+# Whether to show clickable file links in dashboard HTML
+dashboard_links_enabled: true
+
+# Maximum notifications shown in dashboard widget (top N by priority)
+dashboard_notifications_max: 3
+
+# UX validator settings
+ux_validator_exit_zero: true  # always exit 0, even with violations
+ux_validator_max_violations_display: 20
