@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "manifest-l.schema.json",
+  "title": "Tier L Manifest",
+  "description": "JSON Schema for Tier L block manifests. Tier L = 9+ files modified/created, OR cross-repo impact. Requires an ADR.",
+  "type": "object",
+  "required": ["id", "tier", "kind", "phase", "status", "files", "gates", "created_at", "adr_required", "owner"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^block-\\d{3}$",
+      "description": "Block identifier. Format: block-NNN (zero-padded to 3 digits)."
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["L"],
+      "description": "Must be L for this schema."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["doc-only", "refactor", "enhancement", "bugfix", "feature"],
+      "description": "Nature of the work this block performs."
+    },
+    "phase": {
+      "type": "string",
+      "pattern": "^phase-\\d+$",
+      "description": "Phase this block belongs to. Format: phase-N."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "wip", "done", "blocked", "cancelled"],
+      "description": "Current lifecycle status of the block."
+    },
+    "adr_required": {
+      "type": "boolean",
+      "enum": [true],
+      "description": "Must be true for all Tier L blocks. An ADR is mandatory for large-scope changes."
+    },
+    "adr_ref": {
+      "type": "string",
+      "pattern": "^decisions/ADR-\\d{3}.*\\.md$",
+      "description": "Path to the ADR documenting this block's architectural decision. Required when adr_required is true."
+    },
+    "owner": {
+      "type": "string",
+      "description": "Named owner who executes this block. Required for Tier L."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^block-\\d{3}$"
+      },
+      "description": "Block IDs that must be status:done before this block starts.",
+      "default": []
+    },
+    "files": {
+      "type": "object",
+      "required": ["read", "modify", "create"],
+      "properties": {
+        "read": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files read during block execution (not modified)."
+        },
+        "modify": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Existing files modified by this block."
+        },
+        "create": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "New files created by this block."
+        }
+      },
+      "description": "Exhaustive file declaration per Q6.",
+      "$comment": "Tier L constraint: len(modify) + len(create) >= 9, OR cross_repo: true. Checked by /validate-manifest."
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique gate identifier within this manifest."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["file-changed", "file-exists", "manual", "script"],
+            "description": "How this gate is validated."
+          },
+          "paths": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "File paths checked by file-changed or file-exists gates."
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what passes this gate."
+          }
+        }
+      },
+      "description": "Pass conditions. Tier L requires at least 2 gates."
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Date manifest was created. Format: YYYY-MM-DD."
+    },
+    "cross_repo": {
+      "type": "boolean",
+      "description": "True if this block touches files outside the primary repository. Triggers Tier L even with fewer than 9 file changes."
+    },
+    "rollback_plan": {
+      "type": "string",
+      "description": "How to revert this block's changes if it fails after partial completion."
+    },
+    "review_required": {
+      "type": "boolean",
+      "description": "True if a second reviewer must approve before block close. Recommended for Tier L."
+    },
+    "estimated_hours": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Estimated hours to complete. Recommended for Tier L."
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["phase-bound", "cross-phase", "closed", "open"],
+      "description": "Scope constraint for this block."
+    },
+    "axiom_override": {
+      "type": "string",
+      "description": "If an axiom is overridden, state which and why. See PROTOCOLS.md axiom override protocol."
+    }
+  },
+  "if": {
+    "properties": { "adr_required": { "const": true } }
+  },
+  "then": {
+    "required": ["adr_ref"]
+  },
+  "$defs": {
+    "tierLConstraint": {
+      "$comment": "Tier L: len(files.modify) + len(files.create) >= 9 OR cross_repo: true. adr_required must be true and adr_ref must be present. Checked by /validate-manifest."
+    }
+  }
+}

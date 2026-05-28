@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cognitive Architecture vs. Mercado — Comparativo Honesto</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-card: #131820;
+    --bg-card-hover: #1a2230;
+    --border: #1f2937;
+    --border-strong: #374151;
+    --text: #e5e7eb;
+    --text-muted: #9ca3af;
+    --text-dim: #6b7280;
+    --accent: #00d9ff;
+    --accent-soft: #00d9ff20;
+    --success: #10b981;
+    --success-soft: #10b98120;
+    --warning: #f59e0b;
+    --warning-soft: #f59e0b20;
+    --danger: #ef4444;
+    --danger-soft: #ef444420;
+    --partial: #a78bfa;
+    --partial-soft: #a78bfa20;
+    --highlight: #fbbf24;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+    background-image:
+      radial-gradient(at 0% 0%, #00d9ff08 0%, transparent 50%),
+      radial-gradient(at 100% 100%, #a78bfa08 0%, transparent 50%);
+    min-height: 100vh;
+  }
+
+  /* ============ HEADER ============ */
+  header {
+    padding: 80px 24px 60px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    border-radius: 2px;
+  }
+
+  .eyebrow {
+    color: var(--accent);
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #fff 0%, #9ca3af 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 .highlight {
+    background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 18px;
+    max-width: 720px;
+    margin: 0 auto 40px;
+  }
+
+  .meta {
+    display: inline-flex;
+    gap: 24px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  /* ============ LAYOUT ============ */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 24px;
+  }
+
+  section { margin-bottom: 100px; }
+
+  .section-header {
+    margin-bottom: 40px;
+  }
+
+  .section-eyebrow {
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .section-desc {
+    color: var(--text-muted);
+    max-width: 720px;
+    font-size: 16px;
+  }
+
+  /* ============ TL;DR ============ */
+  .tldr {
+    background: linear-gradient(135deg, var(--bg-card) 0%, #131820 100%);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tldr::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--accent), var(--partial));
+  }
+
+  .tldr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 32px;
+    margin-top: 24px;
+  }
+
+  .tldr-item h4 {
+    color: var(--accent);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+
+  .tldr-item p {
+    color: var(--text);
+    font-size: 15px;
+  }
+
+  /* ============ DIMENSIONS GRID ============ */
+  .dimensions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .dim-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.2s ease;
+  }
+
+  .dim-card:hover {
+    border-color: var(--accent);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .dim-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .dim-card h3 {
+    color: var(--text);
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .dim-card p {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* ============ COMPARISON TABLE ============ */
+  .table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    background: var(--bg-card);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1100px;
+  }
+
+  thead {
+    background: linear-gradient(180deg, #1a2230 0%, #131820 100%);
+    border-bottom: 2px solid var(--border-strong);
+  }
+
+  th {
+    padding: 16px 12px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th:first-child {
+    text-align: left;
+    padding-left: 24px;
+    min-width: 280px;
+    color: var(--text);
+  }
+
+  th.us {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
+  }
+
+  tbody tr:hover {
+    background: var(--bg-card-hover);
+  }
+
+  tbody tr.group-header {
+    background: #0a0e14;
+  }
+
+  tbody tr.group-header td {
+    padding: 16px 24px 8px;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-top: 2px solid var(--border-strong);
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 14px 12px;
+    text-align: center;
+    font-size: 14px;
+  }
+
+  td.feature-name {
+    text-align: left;
+    padding-left: 24px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  td.feature-name .feature-desc {
+    display: block;
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  td.us {
+    background: var(--accent-soft);
+  }
+
+  /* ============ CHECK ICONS ============ */
+  .check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .check.yes {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+
+  .check.no {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .check.partial {
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+
+  .check.parcial {
+    background: var(--partial-soft);
+    color: var(--partial);
+  }
+
+  /* ============ ADVANTAGE CARDS ============ */
+  .adv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+  }
+
+  .adv-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .adv-card.us {
+    border-color: var(--success);
+    background: linear-gradient(135deg, #10b98110 0%, var(--bg-card) 50%);
+  }
+
+  .adv-card.them {
+    border-color: var(--warning);
+    background: linear-gradient(135deg, #f59e0b10 0%, var(--bg-card) 50%);
+  }
+
+  .adv-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+  }
+
+  .adv-card.us::before { background: var(--success); }
+  .adv-card.them::before { background: var(--warning); }
+
+  .adv-card .label {
+    display: inline-block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+
+  .adv-card.us .label {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+
+  .adv-card.them .label {
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+
+  .adv-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+  }
+
+  .adv-card p {
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .adv-card .quote {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 13px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+
+  /* ============ USE CASE CARDS ============ */
+  .usecase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .uc-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .uc-card .tool {
+    color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .uc-card h3 {
+    font-size: 1.05rem;
+    margin-bottom: 12px;
+  }
+
+  .uc-card p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .uc-card .strengths {
+    list-style: none;
+  }
+
+  .uc-card .strengths li {
+    color: var(--text);
+    font-size: 13px;
+    padding: 4px 0 4px 18px;
+    position: relative;
+  }
+
+  .uc-card .strengths li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ============ LEGEND ============ */
+  .legend {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* ============ FOOTER ============ */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  footer code {
+    background: var(--bg-card);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 768px) {
+    header { padding: 60px 16px 40px; }
+    main { padding: 40px 16px; }
+    section { margin-bottom: 60px; }
+  }
+
+  /* ============ ANIMATION ============ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  section { animation: fadeUp 0.6s ease both; }
+  section:nth-child(2) { animation-delay: 0.1s; }
+  section:nth-child(3) { animation-delay: 0.2s; }
+
+  /* ============ STAT BAR ============ */
+  .stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 32px;
+  }
+
+  .stat {
+    flex: 1;
+    min-width: 160px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+
+  .stat .value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1;
+  }
+
+  .stat .label {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Análise Comparativa</div>
+  <h1>Cognitive Architecture <span class="highlight">vs. o Mercado</span></h1>
+  <p class="subtitle">
+    Comparativo honesto entre nossa arquitetura cognitiva e as principais ferramentas
+    de engenharia assistida por AI. O que cobrimos que eles não cobrem, e o que
+    eles fazem que ainda não fazemos.
+  </p>
+  <div class="meta">
+    <span>v2.5</span>
+    <span>•</span>
+    <span>2026-05-23</span>
+    <span>•</span>
+    <span>10 ferramentas avaliadas</span>
+    <span>•</span>
+    <span>28 dimensões</span>
+  </div>
+</header>
+
+<main>
+
+<!-- =================== TL;DR =================== -->
+<section class="tldr">
+  <div class="section-eyebrow">TL;DR</div>
+  <h2>O Veredito em 3 Frases</h2>
+  <div class="tldr-grid">
+    <div class="tldr-item">
+      <h4>Onde Dominamos</h4>
+      <p>
+        Disciplina de processo. Manifestos pré-trabalho, retros estruturadas,
+        axiomas formais, auditoria de integridade, governança multi-agent.
+        Ninguém mais opera com esse nível de rigor.
+      </p>
+    </div>
+    <div class="tldr-item">
+      <h4>Onde Empatamos</h4>
+      <p>
+        Estado persistente entre sessões e memória de projeto. Cursor (rules),
+        Claude Code (CLAUDE.md + skills), Windsurf (memory), Aider (repo map) —
+        todos têm algo. A gente faz mais profundo, eles fazem mais visual.
+      </p>
+    </div>
+    <div class="tldr-item">
+      <h4>Onde Perdemos</h4>
+      <p>
+        Integração de IDE, indexação de codebase, autocomplete inline, UI visual,
+        diff inteligente, app generation. Eles têm anos de polimento de UX que
+        nossa arquitetura de texto não tem.
+      </p>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="value">28</div>
+      <div class="label">Dimensões avaliadas</div>
+    </div>
+    <div class="stat">
+      <div class="value">14</div>
+      <div class="label">Onde só nós temos</div>
+    </div>
+    <div class="stat">
+      <div class="value">8</div>
+      <div class="label">Onde estamos atrás</div>
+    </div>
+    <div class="stat">
+      <div class="value">6</div>
+      <div class="label">Onde empatamos</div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== DIMENSIONS =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Critérios</div>
+    <h2>As Dimensões que Avaliamos</h2>
+    <p class="section-desc">
+      Antes de comparar ferramentas, precisamos saber em quê. Estas são as
+      categorias técnicas que definem qualidade de código assistido por AI
+      em projetos de longo prazo — não só "completa código mais rápido".
+    </p>
+  </div>
+
+  <div class="dimensions-grid">
+    <div class="dim-card">
+      <div class="dim-icon">P1</div>
+      <h3>Disciplina de Processo</h3>
+      <p>Manifests obrigatórios antes de qualquer trabalho. Fases formalizadas. Block dependencies. Retrospectivas estruturadas, não livres.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P2</div>
+      <h3>Disciplina de Código</h3>
+      <p>Axiomas formais (P/Q/C/S), code headers obrigatórios, file budgets, pointer integrity verificada via auditoria.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P3</div>
+      <h3>Memória de Projeto</h3>
+      <p>Estado persistente entre sessões. Memory layers separados (design/, project, execution). Continuidade ao retomar após pausas.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P4</div>
+      <h3>Governança e Auditoria</h3>
+      <p>Audit automático com múltiplos checks. Gates por block (testes, security). Override clause formal com justificativa registrada.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P5</div>
+      <h3>Multi-agent e Multi-repo</h3>
+      <p>Coordenação entre agents paralelos. Worktree isolation. Roles formalizados. Workflows cross-repo com Governor.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P6</div>
+      <h3>Engenharia de Contexto</h3>
+      <p>Slim boot HOT/WARM/COLD. Convention snippets per-block. Token budgets. Partial reads. Vocabulário AI-only denso.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P7</div>
+      <h3>Segurança Estruturada</h3>
+      <p>Axiomas S1-S5. Threat models obrigatórios pré-código. Security-review gates. Sensitive data protection.</p>
+    </div>
+    <div class="dim-card">
+      <div class="dim-icon">P8</div>
+      <h3>Integração com Ambiente</h3>
+      <p>IDE integration, codebase indexing, inline completion, diff visual, terminal, browser automation, deploy.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== COMPARISON TABLE =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Comparativo</div>
+    <h2>Tabela Mestra: 10 Ferramentas, 28 Dimensões</h2>
+    <p class="section-desc">
+      A coluna em destaque é nossa. As outras 9 são ferramentas reais do mercado
+      com sua maturidade e foco específico. Honestidade total — onde a gente perde,
+      a gente perde mesmo.
+    </p>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="check yes">✓</span> Tem nativamente</div>
+    <div class="legend-item"><span class="check partial">~</span> Tem parcial</div>
+    <div class="legend-item"><span class="check parcial">+</span> Via plugin/config</div>
+    <div class="legend-item"><span class="check no">✗</span> Não tem</div>
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Dimensão</th>
+          <th class="us">Cognitive Arch</th>
+          <th>Cursor</th>
+          <th>Claude Code</th>
+          <th>Copilot</th>
+          <th>Codex CLI</th>
+          <th>Aider</th>
+          <th>Cline</th>
+          <th>Windsurf</th>
+          <th>Devin</th>
+          <th>Continue</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- GRUPO: PROCESSO -->
+        <tr class="group-header">
+          <td colspan="11">Disciplina de Processo</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Manifest obrigatório pré-trabalho
+            <span class="feature-desc">Antes de mexer em código, declara o quê, por quê, files, gates</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Fases / roadmap estruturado
+            <span class="feature-desc">Exit criteria, block index, dependency groups por fase</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Retrospectivas estruturadas
+            <span class="feature-desc">Facts not stories. Template formal. Audit-checkable</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            ADRs (decisões arquiteturais)
+            <span class="feature-desc">Template formal. Referenciado por código, não restated</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Block dependencies formais
+            <span class="feature-desc">Block A não inicia até B estar status:done</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Health report composto
+            <span class="feature-desc">Audit score + velocity + forecast + coverage + tracks</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <!-- GRUPO: CÓDIGO -->
+        <tr class="group-header">
+          <td colspan="11">Disciplina de Código</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Axiomas formais (P/Q/C/S)
+            <span class="feature-desc">27 regras explícitas, audit-checkable, com override formal</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Code headers obrigatórios
+            <span class="feature-desc">PURPOSE, INPUTS, OUTPUTS, DEPS, SEE em todo arquivo</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Pointer integrity check
+            <span class="feature-desc">Toda referência inter-arquivo resolve. Audit failure se quebrar</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            File size budgets
+            <span class="feature-desc">CLAUDE.md ≤ 110L, STATE.md ≤ 200L. Audit warning se exceder</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Override clause c/ justificativa
+            <span class="feature-desc">Pular regra exige axiom_override: + razão no manifest</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Convention snippets per-block
+            <span class="feature-desc">Só os axiomas relevantes ao kind do block vão pro contexto</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <!-- GRUPO: ESTADO -->
+        <tr class="group-header">
+          <td colspan="11">Estado e Memória</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Memória persistente entre sessões
+            <span class="feature-desc">STATE.md, NEXT.md, board.md sobrevivem ao /clear</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Memory layers separados (DX/UX/AX)
+            <span class="feature-desc">Design / Project identity / Execution state distintos</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            BLOCK_LOG append-only
+            <span class="feature-desc">Histórico imutável de tudo que foi feito, auditável</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Velocity tracking real
+            <span class="feature-desc">Mede actual_duration_hours por tier S/M/L, calcula tendência</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Slim boot (HOT/WARM/COLD)
+            <span class="feature-desc">Token budget &lt; 4000 tok no boot, lazy load via INDEX.md</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <!-- GRUPO: MULTI-AGENT -->
+        <tr class="group-header">
+          <td colspan="11">Multi-agent e Workspace</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Coordenação multi-agent formal
+            <span class="feature-desc">board.md, Governor, roles, task packets</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Worktree isolation
+            <span class="feature-desc">Cada agent trabalha em git worktree separado</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Multi-repo workspace
+            <span class="feature-desc">Workspace root coordena 4+ sub-repos com estado próprio</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <!-- GRUPO: SEGURANÇA -->
+        <tr class="group-header">
+          <td colspan="11">Segurança Estruturada</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Threat model obrigatório
+            <span class="feature-desc">Documento estrutural antes de qualquer código security-critical (S4)</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Security review gate
+            <span class="feature-desc">Block com security:true exige revisão antes do close</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Audit estruturado pré-commit
+            <span class="feature-desc">Múltiplos checks formais antes de commit liberar</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check parcial">+</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <!-- GRUPO: INTEGRAÇÃO (onde a gente perde) -->
+        <tr class="group-header">
+          <td colspan="11">Integração com Ambiente (onde estamos atrás)</td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Indexação automática do codebase
+            <span class="feature-desc">Vector embeddings de todo o código, busca semântica</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Autocomplete inline (Tab completion)
+            <span class="feature-desc">Sugestões automáticas enquanto digita</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            UI visual (diff, board, files)
+            <span class="feature-desc">Interface gráfica nativa, não dependente de markdown</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Input visual (screenshots, designs)
+            <span class="feature-desc">Cola imagem, AI lê e implementa</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Browser / web automation
+            <span class="feature-desc">AI navega web, lê páginas, faz scraping, testa</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check parcial">+</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check parcial">+</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Deploy / preview integrado
+            <span class="feature-desc">Botão de deploy, preview de PR/branch, ambientes</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Geração de app from prompt
+            <span class="feature-desc">Descreve app em linguagem natural, recebe app rodando</span>
+          </td>
+          <td class="us"><span class="check no">✗</span></td>
+          <td><span class="check partial">~</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            Multi-LLM nativo
+            <span class="feature-desc">Funciona com Claude, GPT, modelos locais, sem trava</span>
+          </td>
+          <td class="us"><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check yes">✓</span></td>
+          <td><span class="check no">✗</span></td>
+          <td><span class="check yes">✓</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =================== DIFERENCIAIS =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Diferenciais</div>
+    <h2>O Que Só Cognitive Architecture Tem</h2>
+    <p class="section-desc">
+      14 capacidades que nenhuma outra ferramenta oferece — não porque elas não saibam
+      fazer, mas porque elas resolvem outro problema. A maioria foca em produtividade
+      por linha de código. A gente foca em sustentabilidade de projeto.
+    </p>
+  </div>
+
+  <div class="adv-grid">
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #1</span>
+      <h3>Manifest pré-trabalho como contrato</h3>
+      <p>
+        Antes de escrever uma linha, o agent declara: o que vai fazer, por quê, em quais
+        arquivos, quais gates precisam passar, dependências, scope explícito. Cursor e Claude
+        Code permitem isso, mas é opcional e livre. Aqui é obrigatório e estruturado em S/M/L tiers.
+      </p>
+      <p class="quote">Resultado: scope creep desaparece. AI não pode "ah, já que tô aqui, conserto isso também".</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #2</span>
+      <h3>Retrospectivas como dados, não diário</h3>
+      <p>
+        Cada block termina com retro estruturada: o que foi construído, gates passaram,
+        que axiomas foram violados, scope diverged, duração real. É auditável, não é prosa.
+        85 retros viraram base pra phase-forecast e velocity tracking.
+      </p>
+      <p class="quote">Outras ferramentas: zero registro estruturado pós-trabalho.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #3</span>
+      <h3>Pointer integrity automático</h3>
+      <p>
+        Toda referência inter-arquivo é verificada. Se PROTOCOLS.md menciona
+        protocols/file-reading-protocol.md e o arquivo some, audit FAIL. Não tem "broken
+        link silencioso" — o sistema te cobra.
+      </p>
+      <p class="quote">Nenhuma outra ferramenta verifica isso. Você descobre quebra quando o AI alucina.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #4</span>
+      <h3>Multi-agent com Governor</h3>
+      <p>
+        Múltiplos agents paralelos, cada um em sua worktree, coordenados por um Governor
+        que integra, audita, atualiza estado. Claude Code tem sub-agents mas sem
+        protocolo formal de hand-off. Aqui tem task packets, return packages, e board.md
+        como SSOT.
+      </p>
+      <p class="quote">Resultado: 4 agents podem trabalhar em paralelo sem stomp git nem race condition.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #5</span>
+      <h3>Memory layers (DX/UX/AX)</h3>
+      <p>
+        Memória separada por audiência: <strong>DX</strong> (Design — domain knowledge, arquitetura),
+        <strong>UX</strong> (User — identidade do projeto), <strong>AX</strong> (Agent — execution state).
+        Cada um com permissões diferentes de quem pode mudar e quando.
+      </p>
+      <p class="quote">Cursor rules e CLAUDE.md misturam tudo num blob. Aqui é estratificado.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #6</span>
+      <h3>Axiomas P/Q/C/S com override formal</h3>
+      <p>
+        27 regras explícitas. Para violar uma, manifest precisa de
+        <code style="color:var(--accent);background:#0a0e14;padding:2px 6px;border-radius:4px">axiom_override: "P5 — slim boot violated because..."</code>.
+        Override accumulation &gt; 5 em 30 dias = audit warning (sinal de drift).
+      </p>
+      <p class="quote">Cursor rules são sugestões. Axiomas são contratos.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #7</span>
+      <h3>Phase-level roadmap formal</h3>
+      <p>
+        Cada fase tem exit_criteria, block_index, dependency_groups, estimated_duration,
+        parallel_execution_plan. Phase-close exige todos os exit_criteria atingidos.
+        Não é "tô trabalhando em algo", é "estou na phase-11 com 3/5 critérios completos".
+      </p>
+      <p class="quote">Outras ferramentas operam block-a-block sem horizonte formal.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #8</span>
+      <h3>Convention snippets per-block</h3>
+      <p>
+        Governor lê o <code style="color:var(--accent);background:#0a0e14;padding:2px 6px;border-radius:4px">kind:</code>
+        do block (refactor / implementation / gate) e injeta SÓ os axiomas relevantes
+        no contexto do sub-agent. Sub-agent que faz refactor não precisa saber as 5 regras de gate.
+      </p>
+      <p class="quote">Outras ferramentas mandam o sistema inteiro toda vez.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #9</span>
+      <h3>Security axioms (S1-S5) com gates</h3>
+      <p>
+        Threat model obrigatório (S4) antes de código security-critical.
+        Security review gate (S5) obrigatório no close de blocks com security:true.
+        Auth chain integrity (S2), sensitive data protection (S3), untrusted input (S1).
+      </p>
+      <p class="quote">Copilot e Cursor podem "lembrar" de pensar em segurança. Aqui é obrigatório.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #10</span>
+      <h3>Tracks (concurrent work threads)</h3>
+      <p>
+        Linhas de trabalho concorrentes com benchmark before/after por block. Permite
+        medir se um Track de "performance do server" está realmente melhorando ou só
+        iterando. Stagnation detection automática via benchmark delta.
+      </p>
+      <p class="quote">Pattern só visto em pesquisa acadêmica de software engineering, nunca em ferramenta dev.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #11</span>
+      <h3>Velocity tracking que mede de fato</h3>
+      <p>
+        Coleta actual_duration_hours por tier S/M/L de cada block. Calcula velocity,
+        forecast de phase com confidence level, detecta tendência (acelerando vs desacelerando).
+        Não é estimativa furada — é dado.
+      </p>
+      <p class="quote">Outras ferramentas: zero medição. Você nunca sabe se está mais rápido.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #12</span>
+      <h3>BLOCK_LOG imutável + ADRs estruturados</h3>
+      <p>
+        Histórico append-only de todos os blocks (done / forced / reverted) + ADRs formais
+        para decisões não-óbvias. Combinação resulta em audit trail completo de
+        "por que tomamos essa decisão e quando".
+      </p>
+      <p class="quote">Git log conta o quê. Aqui contamos o porquê.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #13</span>
+      <h3>Sintaxe AI-only densa</h3>
+      <p>
+        Arquivos como STATE.md usam vocabulário próprio definido em _syntax.md.
+        Compacto, denso, key:value. Boot HOT total &lt; 4000 tokens. Outras
+        ferramentas usam prosa que come 10x mais tokens.
+      </p>
+      <p class="quote">Resultado: contexto sobra pra trabalho real, não pra ler arquivos de estado.</p>
+    </div>
+
+    <div class="adv-card us">
+      <span class="label">Diferencial #14</span>
+      <h3>Health report composto</h3>
+      <p>
+        Um único comando gera: audit score, velocity por tier, phase progress %,
+        design coverage %, track health. Snapshot completo do projeto em &lt; 30s.
+        Sem precisar abrir 8 arquivos.
+      </p>
+      <p class="quote">Outras ferramentas: você abre 8 arquivos e tira conclusão na cabeça.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- =================== HONESTIDADE =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Honestidade</div>
+    <h2>O Que Eles Têm Que A Gente Não Tem</h2>
+    <p class="section-desc">
+      Aqui não dá pra esconder. Anos de polimento de UX e features visuais
+      colocaram essas ferramentas muito à frente em produtividade percebida.
+      A diferença é foco: eles otimizam o ato de digitar. A gente otimiza o ato de manter projeto.
+    </p>
+  </div>
+
+  <div class="adv-grid">
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #1</span>
+      <h3>Indexação semântica do codebase</h3>
+      <p>
+        Cursor, Cody, Continue, Aider — todos indexam o codebase com embeddings.
+        Você pergunta "onde tá a lógica de billing" e ele acha. A gente depende
+        do INDEX.md mantido manualmente.
+      </p>
+      <p class="quote">Por que: requer infraestrutura (vector db, embeddings, sync). Custo alto.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #2</span>
+      <h3>Autocomplete inline (Tab)</h3>
+      <p>
+        Copilot, Cursor, Tabnine, Windsurf — sugestão automática enquanto digita.
+        Reduz keystrokes 30-50%. A gente não tem essa camada porque opera
+        a nível de "block", não a nível de "linha".
+      </p>
+      <p class="quote">Pra ter, precisaria virar plugin de IDE. É outro produto, não extensão.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #3</span>
+      <h3>UI visual rica</h3>
+      <p>
+        Diff visual com syntax highlight, file tree, multi-file edit preview, terminal
+        integrado, debugger. Cursor e Windsurf são editores reais. A gente é texto.
+      </p>
+      <p class="quote">UX visual é um produto separado. Markdown só vai até certo ponto.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #4</span>
+      <h3>Input multimodal (screenshots, designs)</h3>
+      <p>
+        Cola imagem do Figma, AI implementa. Cola screenshot de erro, AI debuga.
+        A gente é text-only. Pra mudar, requer integração de visão, o que
+        depende do client (Claude Code já tem; Cursor tem; nossa arch não usa).
+      </p>
+      <p class="quote">Limitação do formato markdown puro.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #5</span>
+      <h3>Browser automation nativa</h3>
+      <p>
+        Devin, Windsurf Cascade, Codex CLI — abrem browser, navegam, leem páginas,
+        fazem scraping, testam aplicação web automaticamente. A gente delega isso
+        via MCP browser tools quando disponível.
+      </p>
+      <p class="quote">Caso de uso super específico (testing E2E, research) onde eles brilham.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #6</span>
+      <h3>App generation from prompt</h3>
+      <p>
+        Bolt.new, v0, Replit Agent — "faz um app de delivery" e em minutos
+        tem app deployado. A gente é o oposto: força planejamento estruturado.
+        Diferentes audiences (prototyping vs. building).
+      </p>
+      <p class="quote">A gente não compete nesse mercado. Eles otimizam pra demos rápidos.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #7</span>
+      <h3>Distribuição e instalação</h3>
+      <p>
+        Cursor: baixa instalador, abre, login, funciona. A gente: clona repo,
+        lê 12 arquivos, instala Python, configura .env, e ainda não sabe se
+        funciona até rodar audit.sh.
+      </p>
+      <p class="quote">Tempo do user pra primeiro valor: deles 2 min, nosso 2 horas.</p>
+    </div>
+
+    <div class="adv-card them">
+      <span class="label">Eles ganham #8</span>
+      <h3>Comunidade e ecossistema</h3>
+      <p>
+        Cursor tem milhões de users, marketplace de rules. Claude Code tem skills
+        e MCP servers comunidade. A gente tem 1 user (você). Sem rede, sem
+        templates de terceiros, sem suporte distribuído.
+      </p>
+      <p class="quote">Custo de produto pessoal. Vira problema se virar comercial.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- =================== VEREDICTS POR FERRAMENTA =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Quando Usar Cada</div>
+    <h2>Veredict por Caso de Uso</h2>
+    <p class="section-desc">
+      Não é "Cognitive Architecture é melhor que tudo". Cada ferramenta atende
+      um tipo de projeto e fase. Eis quando escolher cada uma — incluindo nós.
+    </p>
+  </div>
+
+  <div class="usecase-grid">
+
+    <div class="uc-card" style="border-color: var(--accent);">
+      <div class="tool">▌Cognitive Architecture</div>
+      <h3>Projeto longo, multi-repo, multi-agent</h3>
+      <p>Quando o projeto vai durar 1+ ano e tem múltiplos sub-sistemas. MMORPGs, plataformas SaaS, sistemas com vários times.</p>
+      <ul class="strengths">
+        <li>Sustentabilidade arquitetural</li>
+        <li>Audit trail completo</li>
+        <li>Multi-agent coordination</li>
+        <li>Security gates formais</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Cursor</div>
+      <h3>Dev individual produtivo</h3>
+      <p>Quando você quer máxima velocidade individual em um codebase médio. Editor moderno, indexação, tab completion, composer agent.</p>
+      <ul class="strengths">
+        <li>UX visual best-in-class</li>
+        <li>Multi-file edits nativos</li>
+        <li>Indexação semântica</li>
+        <li>Plug-and-play</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Claude Code</div>
+      <h3>CLI agent disciplinado</h3>
+      <p>Quando você opera no terminal e quer agent autônomo com skills, MCPs e sub-agents. Excelente para automação e tasks longos.</p>
+      <ul class="strengths">
+        <li>Sub-agents + skills</li>
+        <li>MCP ecosystem</li>
+        <li>Hooks e slash commands</li>
+        <li>Background tasks</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌GitHub Copilot</div>
+      <h3>Empresa Microsoft / GitHub</h3>
+      <p>Quando você já vive em VS Code/GitHub e quer integração nativa, compliance enterprise, PR summaries.</p>
+      <ul class="strengths">
+        <li>Integração GitHub profunda</li>
+        <li>Copilot Workspace</li>
+        <li>Compliance / enterprise</li>
+        <li>Tab completion clássico</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Aider</div>
+      <h3>Hardcore terminal + git lover</h3>
+      <p>Open-source, terminal-puro, git-first. Repo map, multi-file edits via diff, multi-LLM. Para quem ama controle total.</p>
+      <ul class="strengths">
+        <li>Open source completo</li>
+        <li>Multi-LLM nativo</li>
+        <li>Git como SSOT</li>
+        <li>Sem GUI dependencies</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Cline / Continue.dev</div>
+      <h3>VS Code com agent open</h3>
+      <p>Extensions VS Code que dão agent autônomo. Continue é mais customizável; Cline é mais agressivo em automação.</p>
+      <ul class="strengths">
+        <li>VS Code native</li>
+        <li>Plan/Act modes (Cline)</li>
+        <li>Custom slash commands (Continue)</li>
+        <li>Open source</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Windsurf</div>
+      <h3>IDE com agent + memory</h3>
+      <p>Fork do VS Code da Codeium. Cascade agent mode com memory system. Boa pra projetos médios com workflow estruturado.</p>
+      <ul class="strengths">
+        <li>Cascade Flow</li>
+        <li>Memory persistent</li>
+        <li>Indexação local</li>
+        <li>UX visual moderna</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Devin</div>
+      <h3>Autonomy longa, tasks completas</h3>
+      <p>"AI engineer" autônomo. Browser, shell, editor, planejamento. Bom pra tasks que duram horas sem supervisão.</p>
+      <ul class="strengths">
+        <li>Long-horizon autonomy</li>
+        <li>Multi-tool nativo</li>
+        <li>Deploy integration</li>
+        <li>Browser automation</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Bolt.new / v0</div>
+      <h3>Prototipagem ultra-rápida</h3>
+      <p>"Faz um app de X" → app rodando em minutos. Zero discipline, máxima velocidade. Para prototypes, demos, MVPs.</p>
+      <ul class="strengths">
+        <li>Time to first app: minutos</li>
+        <li>Preview instantâneo</li>
+        <li>Stack moderna pré-config</li>
+        <li>Deploy 1-click</li>
+      </ul>
+    </div>
+
+    <div class="uc-card">
+      <div class="tool">▌Codex CLI</div>
+      <h3>OpenAI no terminal</h3>
+      <p>Agent CLI da OpenAI com sandbox de execução. Bom pra quem prefere modelos OpenAI e ambiente isolado.</p>
+      <ul class="strengths">
+        <li>Sandbox seguro</li>
+        <li>Apply patches via diff</li>
+        <li>Browser integration</li>
+        <li>OpenAI-native</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- =================== A REAL =================== -->
+<section>
+  <div class="section-header">
+    <div class="section-eyebrow">Conclusão</div>
+    <h2>A Real Sobre Onde Estamos</h2>
+  </div>
+
+  <div class="tldr" style="background: linear-gradient(135deg, #0a0e14 0%, var(--bg-card) 100%);">
+    <div class="tldr-grid" style="grid-template-columns: 1fr;">
+      <div class="tldr-item">
+        <h4>O que nós somos</h4>
+        <p style="font-size: 16px; line-height: 1.8;">
+          Cognitive Architecture é a primeira tentativa séria de aplicar engenharia de software
+          formal (manifests, gates, auditoria, axiomas, retrospectivas) ao trabalho com AI.
+          Enquanto o mercado otimiza "AI escreve código mais rápido", a gente otimiza
+          "AI escreve código que ainda fará sentido daqui a 2 anos".
+        </p>
+      </div>
+      <div class="tldr-item">
+        <h4>O que não somos</h4>
+        <p style="font-size: 16px; line-height: 1.8;">
+          Não somos uma IDE. Não somos um editor. Não somos um substituto pra Cursor ou
+          Claude Code. Somos um <strong>protocolo + estrutura de governança</strong> que
+          roda <em>em cima</em> dessas ferramentas. Idealmente, no futuro, somos um MCP
+          server ou plugin que adiciona disciplina onde antes só havia velocidade.
+        </p>
+      </div>
+      <div class="tldr-item">
+        <h4>Posicionamento de produto</h4>
+        <p style="font-size: 16px; line-height: 1.8;">
+          O mercado tem ferramentas pra <strong>velocidade</strong> (Cursor, Copilot, Bolt) e
+          ferramentas pra <strong>autonomia</strong> (Devin, Replit Agent). Não tem ferramenta
+          pra <strong>sustentabilidade arquitetural de longo prazo</strong>. Essa é nossa lacuna.
+          O cara que vai construir produto sério de 2+ anos é nosso cliente.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>
+    Gerado em <code>2026-05-23</code> a partir de Cognitive Architecture <code>v2.5</code>
+    (24 axiomas P/Q/C/S, 11 fases, 85 blocks completos).
+  </p>
+  <p style="margin-top:8px; color:var(--text-dim);">
+    Ferramentas concorrentes avaliadas com base em documentação pública e features
+    declaradas em maio de 2026. Versions evoluem rápido — algumas linhas podem desatualizar
+    em semanas.
+  </p>
+</footer>
+
+</body>
+</html>

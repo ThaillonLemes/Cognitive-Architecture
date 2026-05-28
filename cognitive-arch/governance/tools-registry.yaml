@@ -1,0 +1,183 @@
+# cognitive-arch tools registry
+# Master Agent reads this file at session start.
+# schema: protocols/tools-registry-spec.md
+# Fields: id, name, command, description, recommended_interval_days, trigger_type, priority, last_run, mutable_by
+# trigger_type: time | event
+# priority: high | medium | low
+# last_run: ISO-8601 timestamp | "never"
+# mutable_by: master (last_run field only; structural changes require a block)
+
+schema_version: "1.0"
+generated_at: "2026-05-27"
+timezone: America/Sao_Paulo
+
+tools:
+  - id: audit
+    name: "Project audit"
+    command: "bash audit.sh"
+    description: "Full 10-check project audit: file budget, pointers, axioms, velocity, integrity lock."
+    recommended_interval_days: 1
+    trigger_type: time
+    priority: high
+    last_run: "2026-05-28T04:11Z"
+    mutable_by: master
+
+  - id: health-report
+    name: "Health report"
+    command: "python sdk/health_report.py --arch-root ."
+    description: "5-line project health snapshot: phase, blocks done, open issues, last block, last audit."
+    recommended_interval_days: 3
+    trigger_type: time
+    priority: high
+    last_run: "2026-05-28T06:02Z"
+    mutable_by: master
+
+  - id: pattern-mining
+    name: "Pattern mining"
+    command: "python sdk/pattern_analyzer.py && python sdk/patterns_report.py"
+    description: "Extracts retro signals, detects patterns (threshold D1=3/30), generates governance/patterns.md."
+    recommended_interval_days: 7
+    trigger_type: time
+    priority: medium
+    last_run: "2026-05-28T03:24Z"
+    mutable_by: master
+
+  - id: weekly-report
+    name: "Weekly report"
+    command: "python sdk/weekly_report.py --arch-root ."
+    description: "7-day activity report: blocks closed, velocity, patterns detected. Output: governance/reports/weekly-YYYY-MM-DD.html."
+    recommended_interval_days: 7
+    trigger_type: time
+    priority: medium
+    last_run: "2026-05-28T03:24Z"
+    mutable_by: master
+
+  - id: phase-forecast
+    name: "Phase forecast"
+    command: "python sdk/phase_forecast.py --arch-root ."
+    description: "Estimates remaining time in current phase based on velocity and open blocks."
+    recommended_interval_days: 3
+    trigger_type: time
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: dependency-check
+    name: "Dependency check"
+    command: "python sdk/dependency_resolver.py --arch-root ."
+    description: "Detects blocks whose dependencies just became done. Fires on block close events."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: conflicts-check
+    name: "Governance conflicts check"
+    command: "bash audit.sh --check conflicts"
+    description: "Checks for cross-file pointer conflicts and stale references in governance files."
+    recommended_interval_days: 1
+    trigger_type: time
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: security-revalidation
+    name: "Security review revalidation"
+    command: "python sdk/security_review.py --arch-root . --revalidate"
+    description: "Re-runs S1-S5 security checks. Updates governance/security-status.md. Required every 30 days."
+    recommended_interval_days: 30
+    trigger_type: time
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: integrity-check
+    name: "Integrity lock check"
+    command: "python sdk/integrity_check.py --verify --arch-root ."
+    description: "Verifies SHA256 hashes of all immutable files against .integrity.lock."
+    recommended_interval_days: 1
+    trigger_type: time
+    priority: high
+    last_run: "2026-05-28T03:24Z"
+    mutable_by: master
+
+  - id: dashboard-refresh
+    name: "Dashboard refresh"
+    command: "python sdk/dashboard_generator.py --arch-root ."
+    description: "Regenerates governance/dashboard.html with latest agents, blocks, health metrics, patterns, and roadmap. Lazy: skip if dashboard.html is <1h old."
+    recommended_interval_days: 1
+    trigger_type: time
+    priority: medium
+    last_run: "2026-05-28T06:02Z"
+    mutable_by: master
+
+  - id: post-pause-briefing
+    name: "Post-pause briefing"
+    command: "python sdk/briefing_generator.py --arch-root ."
+    description: "Generates context briefing when session gap exceeds pause_threshold_hours (default 24h). Fires on session start; skipped if gap < threshold."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: block-start
+    name: "Block start automation"
+    command: "python sdk/block_start.py --block-id <block-id> --arch-root ."
+    description: "Validates manifest, checks deps, updates board+STATE+NEXT. Saves ~1500 tokens per block start."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: block-close
+    name: "Block close automation"
+    command: "python sdk/block_close.py --block-id <block-id> --arch-root ."
+    description: "Automates steps 2,3,4,6 of block-close: STATE, NEXT, BLOCK_LOG, board. Saves ~3500 tokens per close."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: state-update
+    name: "State manager"
+    command: "python sdk/state_manager.py --set-state 'key:val' --arch-root ."
+    description: "Atomic update of STATE.md and NEXT.md key-value pairs. Prevents corruption from manual AI editing."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: board-update
+    name: "Board manager"
+    command: "python sdk/board_manager.py --agent <name> --status <status> --arch-root ."
+    description: "Atomic update of agent rows in board.md. Saves ~800 tokens per board operation."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: phase-start
+    name: "Phase start automation"
+    command: "python sdk/phase_manager.py --start <phase-id> --arch-root ."
+    description: "Validates phase readiness, updates STATE+NEXT+board, identifies first block. Saves ~3000 tokens."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: phase-close
+    name: "Phase close automation"
+    command: "python sdk/phase_manager.py --close <phase-id> --arch-root ."
+    description: "Generates retro scaffold, closes STATE, points NEXT to next phase. Saves ~3000 tokens."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
