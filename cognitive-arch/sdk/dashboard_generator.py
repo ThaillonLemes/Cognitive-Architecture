@@ -355,6 +355,63 @@ def generate_dashboard(
     )
 
 
+def _render_proposals_widget(index_path: "Path | None") -> str:
+    """Render the proposals widget HTML from governance/proposals/index.md.
+
+    Shows: pending count badge + table of last 5 proposals.
+    """
+    from pathlib import Path as _Path
+    if index_path is None or not _Path(str(index_path)).exists():
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Learning Loop — Proposals</h2>'
+            '<p style="color:var(--text-dim)">Proposals index not found &mdash; '
+            'run <code>python sdk/protocol_updater.py --arch-root .</code></p>'
+            '</div>'
+        )
+
+    import re as _re
+    text = _Path(str(index_path)).read_text(encoding="utf-8", errors="replace")
+
+    # Parse table rows: | date | [id](path) | pattern | target | status |
+    rows = _re.findall(
+        r"^\|\s*(\S+)\s*\|\s*\[([^\]]+)\]\([^)]+\)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*(\S+)\s*\|",
+        text, _re.MULTILINE
+    )
+
+    if not rows:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Learning Loop — Proposals</h2>'
+            '<p style="color:var(--text-dim)">No proposals yet — learning loop is quiet.</p>'
+            '</div>'
+        )
+
+    pending_count = sum(1 for *_, status in rows if status.strip() == "pending")
+    badge_color = "var(--orange)" if pending_count > 0 else "var(--green)"
+    badge = f'<span class="badge" style="background:{badge_color};color:#fff">{pending_count} pending</span>'
+
+    # Last 5 proposals
+    recent = rows[-5:]
+    table_rows = "\n".join(
+        f'<tr><td>{r[0]}</td><td style="font-size:.8rem">{r[1]}</td>'
+        f'<td style="font-size:.8rem">{r[2].strip()}</td>'
+        f'<td><span class="badge badge-{"warning" if r[4].strip()=="pending" else "done"}">'
+        f'{r[4].strip()}</span></td></tr>'
+        for r in recent
+    )
+
+    return (
+        '<div class="card" style="border-left-color:var(--orange)">'
+        f'<h2>Learning Loop — Proposals {badge}</h2>'
+        '<table>'
+        '<thead><tr><th>Date</th><th>ID</th><th>Pattern</th><th>Status</th></tr></thead>'
+        f'<tbody>{table_rows}</tbody>'
+        '</table>'
+        '</div>'
+    )
+
+
 def _render_adr_widget(index_path: "Path | None") -> str:
     """Render the ADR widget HTML from governance/adrs/index.md.
 
@@ -633,6 +690,9 @@ def render_html(data: DashboardData, css: Optional[str] = None) -> str:
 
   <!-- Token Widget -->
   {_render_token_widget(getattr(data, "token_records", None), getattr(data, "token_budget", None))}
+
+  <!-- Proposals Widget -->
+  {_render_proposals_widget(getattr(data, "proposals_index_path", None))}
 
   <!-- Footer: Quick Commands -->
   <div class="card" style="border-left-color:var(--grey)">

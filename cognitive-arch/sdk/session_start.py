@@ -61,6 +61,18 @@ def _parse_registry(registry_path: Path) -> list[dict]:
     return tools
 
 
+def _count_pending_proposals(arch_root: Path) -> int:
+    """Count proposals with status:pending in governance/proposals/index.md."""
+    index_path = arch_root / "governance" / "proposals" / "index.md"
+    if not index_path.exists():
+        return 0
+    try:
+        text = index_path.read_text(encoding="utf-8", errors="replace")
+        return text.count("| pending |")
+    except OSError:
+        return 0
+
+
 def _update_last_run(registry_path: Path, tool_id: str, ts: str) -> None:
     """Update last_run for tool_id in registry file in-place."""
     if not registry_path.exists():
@@ -211,6 +223,10 @@ def run_audit_py(arch_root: Path) -> tuple[bool, str]:
     return _run([sys.executable, "sdk/audit.py", "--arch-root", "."], arch_root, "audit")
 
 
+def run_protocol_updater(arch_root: Path) -> tuple[bool, str]:
+    return _run([sys.executable, "sdk/protocol_updater.py", "--arch-root", "."], arch_root, "protocol-updater")
+
+
 TOOL_RUNNERS = {
     "health-report": run_health_report,
     "pattern-mining": run_pattern_mining,
@@ -218,6 +234,7 @@ TOOL_RUNNERS = {
     "weekly-report": run_weekly_report,
     "integrity-check": run_integrity_check,
     "audit": run_audit_py,
+    "protocol-updater": run_protocol_updater,
 }
 
 
@@ -307,6 +324,13 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
     if failed:
         print(f"  FAILED:  {', '.join(failed)}")
     print()
+
+    # Proposals summary (Phase 20)
+    pending_proposals = _count_pending_proposals(arch_root)
+    if pending_proposals > 0:
+        print(f"  [PROPOSALS] {pending_proposals} pending — see governance/proposals/")
+    else:
+        print(f"  [PROPOSALS] 0 pending — none to review")
 
     # Patterns summary
     patterns_path = arch_root / "governance" / "patterns.md"
