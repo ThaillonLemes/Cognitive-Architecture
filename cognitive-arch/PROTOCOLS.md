@@ -96,6 +96,8 @@ Current markers:
 - S4 → `[code-only]`
 - S5 → `[code-only]`
 
+**P-TOK-1. Track actual token cost on every block.** Every block retrospective must record `tok_actual` (user-reported token count for the block). Budget overrun at phase level triggers a governance review. Advisory at phase level; hard enforcement at block-close (see `sdk/block_close.py`). Added Phase 18.
+
 ---
 
 ## Axiom override protocol
