@@ -1,0 +1,11 @@
+# Governor v2 — Python dependencies
+# SEE: design/governor-v2.md §2, sdk/governor.py
+
+# Anthropic Python SDK — required for sub-agent dispatch (block-033)
+anthropic>=0.25.0
+
+# YAML parsing — required for manifest frontmatter parsing (block-031)
+pyyaml>=6.0
+
+# Test runner — required for sdk/tests/ suite (block-051)
+pytest>=7.0

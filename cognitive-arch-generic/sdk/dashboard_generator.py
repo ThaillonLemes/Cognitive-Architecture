@@ -1,0 +1,862 @@
+# cognitive-arch / sdk/dashboard_generator.py
+# purpose: Live dashboard HTML generator.
+#   Output: governance/dashboard.html (standalone, no CDN, dark theme).
+#   Sections: active-agents | next-actions | health-metrics | recent-patterns
+#             + timeline (last 7d) + roadmap (phases) + quick commands footer.
+# stdlib-only; no external dependencies
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Optional
+
+DASHBOARD_PATH = "governance/dashboard.html"
+BLOCK_LOG_PATH = "blocks/BLOCK_LOG.md"
+STATE_PATH = "STATE.md"
+NEXT_PATH = "NEXT.md"
+BOARD_PATH = "board.md"
+PATTERNS_PATH = "governance/patterns.md"
+STYLES_PATH = "templates/_styles.css"
+
+_TIMELINE_DAYS = 7
+_MAX_PATTERNS = 5
+_ROADMAP_MAX_PHASE = 17
+
+# ---------------------------------------------------------------------------
+# Fallback CSS (mirrors _styles.css; used when the file is not found)
+# ---------------------------------------------------------------------------
+
+_FALLBACK_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f0f1a;
+       color: #c8d6e5; padding: 2rem; line-height: 1.6; font-size: 14px; }
+h1 { color: #a8d8ea; font-size: 1.6rem; margin-bottom: .3rem; }
+h2 { color: #f9ca24; font-size: 1rem; text-transform: uppercase;
+     letter-spacing: .06em; margin-bottom: .6rem; }
+h3 { color: #e0e0e0; font-size: .9rem; font-weight: 600; margin-bottom: .3rem; }
+p  { margin-bottom: .5rem; }
+:root {
+  --bg-card:    #1a1a2e; --bg-accent:  #2a2a4a; --border:     #1e1e3a;
+  --purple:     #6c5ce7; --gold:       #f9ca24; --teal:       #a8d8ea;
+  --green:      #00b894; --red:        #d63031; --orange:     #e17055;
+  --grey:       #636e72; --text:       #c8d6e5; --text-dim:   #7f8c8d;
+  --code-bg:    #2a2a4a; --code-color: #a29bfe;
+}
+.card { background: var(--bg-card); border-radius: 8px; padding: 1rem 1.2rem;
+        border-left: 3px solid var(--purple); margin-bottom: 1rem; }
+.card-teal  { border-left-color: var(--teal); }
+.card-gold  { border-left-color: var(--gold); }
+.card-green { border-left-color: var(--green); }
+.card-red   { border-left-color: var(--red); }
+.badge { display: inline-block; padding: .15em .5em; border-radius: 3px;
+         font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+.badge-done     { background: var(--green); color: #fff; }
+.badge-active   { background: var(--purple); color: #fff; }
+.badge-planned  { background: var(--bg-accent); color: var(--text-dim); }
+.badge-critical { background: var(--red); color: #fff; }
+.badge-warning  { background: var(--orange); color: #fff; }
+table { border-collapse: collapse; width: 100%; margin-bottom: .8rem; }
+td, th { padding: .35rem .6rem; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-weight: 600; text-align: left; font-size: .8rem; }
+td:first-child { color: var(--text-dim); }
+strong { color: #e0e0e0; }
+ul { padding-left: 1.2rem; }
+li { margin: .2rem 0; font-size: .9rem; }
+code { background: var(--code-bg); color: var(--code-color); padding: .2em .4em;
+       border-radius: 3px; font-size: .85em;
+       font-family: 'Consolas', 'Courier New', monospace; }
+.meta { color: var(--text-dim); font-size: .8rem; margin-bottom: 1rem; }
+.generated { color: var(--grey); font-size: .7rem; margin-top: 2rem; text-align: right; }
+.phase-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.phase-pill { padding: .2em .6em; border-radius: 12px; font-size: .75rem; font-weight: 600; }
+.phase-pill.done    { background: var(--green); color: #fff; }
+.phase-pill.active  { background: var(--purple); color: #fff; }
+.phase-pill.planned { background: var(--bg-accent); color: var(--text-dim);
+                      border: 1px solid var(--border); }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+             gap: 1rem; margin-bottom: 1.5rem; }
+.timeline { list-style: none; padding: 0; }
+.timeline li { display: flex; gap: .6rem; margin-bottom: .4rem; font-size: .85rem; }
+.timeline .dot { width: 8px; height: 8px; border-radius: 50%;
+                 background: var(--purple); margin-top: .4rem; flex-shrink: 0; }
+.timeline .dot.done { background: var(--green); }
+"""
+
+
+# ---------------------------------------------------------------------------
+# Data model
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AgentRow:
+    agent_id: str
+    block: str      # current block or "-"
+    status: str     # idle | wip | wait | done
+    group: str
+    last_done: str  # last_done field or "-"
+
+
+@dataclass
+class DashboardData:
+    generated_at: str
+    current_phase: str
+    next_action: str
+    manifest: str      # manifest path from NEXT.md
+    last_block: str
+
+    # Column 1: Active Agents (parsed from board.md)
+    agents: list[AgentRow] = field(default_factory=list)
+
+    # Column 3: Health Metrics
+    blocks_closed_7d: list[str] = field(default_factory=list)
+    velocity_blocks_per_day: Optional[float] = None
+    stale_tool_count: int = 0
+    critical_tool_ids: list[str] = field(default_factory=list)
+    forecast_blocks_next_7d: Optional[int] = None
+
+    # Column 4: Recent Patterns
+    recent_patterns: list[str] = field(default_factory=list)
+
+    # Timeline: list of (date_str, block_id) tuples, newest first
+    timeline_entries: list = field(default_factory=list)
+
+    # Roadmap
+    phases_done: list[str] = field(default_factory=list)
+    phases_active: list[str] = field(default_factory=list)
+    phases_planned: list[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _arch_path(arch_root: Optional[str]) -> Path:
+    return Path(arch_root) if arch_root is not None else Path.cwd()
+
+
+def _read_ux_config(arch_root: Optional[str] = None) -> dict:
+    """Read governance/ux-config.yaml. Returns defaults on missing/parse error."""
+    defaults = {"dashboard_link_protocol": "file", "dashboard_links_enabled": True,
+                "dashboard_notifications_max": 3}
+    root = _arch_path(arch_root)
+    config_path = root / "governance" / "ux-config.yaml"
+    try:
+        text = config_path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("#") or ":" not in line:
+                continue
+            k, _, v = line.partition(":")
+            k, v = k.strip(), v.strip()
+            if k == "dashboard_link_protocol":
+                defaults[k] = v
+            elif k in ("dashboard_links_enabled",):
+                defaults[k] = v.lower() not in ("false", "0", "no")
+            elif k == "dashboard_notifications_max":
+                try:
+                    defaults[k] = int(v)
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    return defaults
+
+
+def _linkify_path(path_str: str, protocol: str = "file", arch_root: Optional[Path] = None) -> str:
+    """Wrap a local file path string in an HTML anchor tag.
+
+    protocol: 'file' → file:///abs/path, 'vscode' → vscode://file/abs/path
+    Normalizes backslashes for URL. Returns original string if path is empty.
+    """
+    if not path_str or path_str in ("-", "~", "unknown", "?"):
+        return path_str
+    p = Path(path_str) if arch_root is None else arch_root / path_str
+    url_path = str(p).replace("\\", "/")
+    if not url_path.startswith("/"):
+        url_path = "/" + url_path
+    if protocol == "vscode":
+        href = f"vscode://file{url_path}"
+    else:
+        href = f"file://{url_path}"
+    return f'<a href="{href}" title="{path_str}">{path_str}</a>'
+
+
+def _read_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _parse_kv(content: str) -> dict:
+    """Parse key:value dense format (STATE.md / NEXT.md)."""
+    result: dict = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        for token in line.split():
+            if ":" in token:
+                key, _, val = token.partition(":")
+                if key and val:
+                    result[key] = val
+    return result
+
+
+def _parse_board(board_content: str) -> list[AgentRow]:
+    """Parse board.md agent rows into AgentRow list."""
+    rows = []
+    for line in board_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.startswith("agent:"):
+            continue
+        kv: dict = {}
+        for token in line.split():
+            if ":" in token:
+                k, _, v = token.partition(":")
+                kv[k] = v
+        if "agent" not in kv:
+            continue
+        rows.append(AgentRow(
+            agent_id=kv.get("agent", "-"),
+            block=kv.get("b", "-"),
+            status=kv.get("status", "-"),
+            group=kv.get("group", "-"),
+            last_done=kv.get("last_done", "-"),
+        ))
+    return rows
+
+
+def _blocks_in_window(log_content: str, days: int, now_dt: datetime) -> list[str]:
+    """Return block IDs with 'done' event within the last `days` days (inclusive)."""
+    cutoff = (now_dt - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = now_dt.strftime("%Y-%m-%d")
+    blocks = []
+    for line in log_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 4 and parts[1] == "done":
+            date_str = parts[3]
+            if cutoff <= date_str <= end_date:
+                blocks.append(parts[0])
+    return blocks
+
+
+def _timeline_entries(log_content: str, days: int, now_dt: datetime) -> list:
+    """Return (date, block_id) tuples for last `days` days, newest first."""
+    cutoff = (now_dt - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = now_dt.strftime("%Y-%m-%d")
+    entries = []
+    for line in log_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 4 and parts[1] == "done":
+            date_str = parts[3]
+            if cutoff <= date_str <= end_date:
+                entries.append((date_str, parts[0]))
+    entries.sort(key=lambda t: t[0], reverse=True)
+    return entries
+
+
+def _extract_recent_patterns(patterns_content: str, max_count: int = _MAX_PATTERNS) -> list[str]:
+    """Extract up to max_count pattern names from governance/patterns.md."""
+    _SKIP = {"patterns report", "summary table", "top patterns"}
+    names = []
+    for line in patterns_content.splitlines():
+        m = re.match(r"^#{2,3}\s+(.+)", line.strip())
+        if m:
+            name = m.group(1).strip()
+            if name.lower() not in _SKIP:
+                names.append(name)
+            if len(names) >= max_count:
+                break
+    return names
+
+
+def _build_roadmap(
+    current_phase_str: str,
+    max_phase: int = _ROADMAP_MAX_PHASE,
+) -> tuple[list[str], list[str], list[str]]:
+    """
+    Return (done, active, planned) phase number lists as strings.
+
+    Phases 1..(cur-1) are done, [cur] is active, (cur+1)..max_phase are planned.
+    """
+    try:
+        cur = int(current_phase_str)
+    except (ValueError, TypeError):
+        cur = 1
+
+    done = [str(p) for p in range(1, cur)]
+    active = [str(cur)]
+    planned = [str(p) for p in range(cur + 1, max_phase + 1)]
+    return done, active, planned
+
+
+def _velocity(block_count: int, days: int) -> Optional[float]:
+    if days <= 0:
+        return None
+    return round(block_count / days, 2)
+
+
+def _forecast(velocity: Optional[float], days_next: int = 7) -> Optional[int]:
+    if velocity is None:
+        return None
+    return max(0, round(velocity * days_next))
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def generate_dashboard(
+    arch_root: Optional[str] = None,
+    now_ts: Optional[str] = None,
+    # Injectable for testing
+    log_content: Optional[str] = None,
+    state_content: Optional[str] = None,
+    next_content: Optional[str] = None,
+    board_content: Optional[str] = None,
+    patterns_content: Optional[str] = None,
+    stale_tools: Optional[list] = None,
+) -> DashboardData:
+    """
+    Generate a DashboardData snapshot from project files.
+    All content parameters are injectable for testing (None → read from disk).
+    """
+    now_dt: datetime
+    if now_ts:
+        now_dt = datetime.fromisoformat(now_ts)
+        if now_dt.tzinfo is None:
+            now_dt = now_dt.replace(tzinfo=timezone.utc)
+    else:
+        now_dt = datetime.now(timezone.utc)
+
+    root = _arch_path(arch_root)
+
+    if log_content is None:
+        log_content = _read_file(root / BLOCK_LOG_PATH)
+    if state_content is None:
+        state_content = _read_file(root / STATE_PATH)
+    if next_content is None:
+        next_content = _read_file(root / NEXT_PATH)
+    if board_content is None:
+        board_content = _read_file(root / BOARD_PATH)
+    if patterns_content is None:
+        patterns_content = _read_file(root / PATTERNS_PATH)
+
+    if stale_tools is None:
+        try:
+            from master_scheduler import check_schedule
+            stale_tools = check_schedule(now_dt=now_dt, arch_root=arch_root)
+        except Exception:
+            stale_tools = []
+
+    state = _parse_kv(state_content)
+    nxt = _parse_kv(next_content)
+
+    current_phase = state.get("phase", "unknown")
+    next_action = nxt.get("next_action", state.get("next", "unknown"))
+    manifest = nxt.get("manifest", "-")
+    last_block = state.get("last_block", "-")
+
+    agents = _parse_board(board_content)
+
+    blocks_7d = _blocks_in_window(log_content, _TIMELINE_DAYS, now_dt)
+    velocity = _velocity(len(blocks_7d), _TIMELINE_DAYS)
+    forecast = _forecast(velocity)
+
+    from master_scheduler import URGENCY_CRITICAL
+    critical_ids = [s.tool_id for s in stale_tools if s.urgency == URGENCY_CRITICAL]
+
+    patterns = _extract_recent_patterns(patterns_content)
+    timeline = _timeline_entries(log_content, _TIMELINE_DAYS, now_dt)
+    phases_done, phases_active, phases_planned = _build_roadmap(current_phase)
+
+    return DashboardData(
+        generated_at=now_dt.isoformat(),
+        current_phase=current_phase,
+        next_action=next_action,
+        manifest=manifest,
+        last_block=last_block,
+        agents=agents,
+        blocks_closed_7d=blocks_7d,
+        velocity_blocks_per_day=velocity,
+        stale_tool_count=len(stale_tools),
+        critical_tool_ids=critical_ids,
+        forecast_blocks_next_7d=forecast,
+        recent_patterns=patterns,
+        timeline_entries=timeline,
+        phases_done=phases_done,
+        phases_active=phases_active,
+        phases_planned=phases_planned,
+    )
+
+
+def _render_notifications_widget(arch_root: "Path | str | None") -> str:
+    """Render the governor notifications widget. Shows top N pending by priority."""
+    _PCOLORS = {"critical": "#d63031", "high": "#e17055", "medium": "#f9ca24", "low": "#6c5ce7"}
+    _PORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    try:
+        from pathlib import Path as _Path
+        root = _Path(str(arch_root)) if arch_root is not None else _Path.cwd()
+        import sys as _sys
+        _sys.path.insert(0, str(root / "sdk"))
+        from notification_manager import Governor
+        ux = _read_ux_config(str(root))
+        max_n = ux.get("dashboard_notifications_max", 3)
+        items = [n for n in Governor(root).list(pending_only=True)]
+        if not items:
+            return (
+                '<div class="card card-green">'
+                '<h2>Governor Notifications</h2>'
+                '<p style="color:var(--green)">No pending notifications — system quiet.</p>'
+                '</div>'
+            )
+        items.sort(key=lambda n: (_PORDER.get(n.priority, 9), n.created_at))
+        shown = items[:max_n]
+        from datetime import date as _date
+        rows = []
+        for n in shown:
+            try:
+                age = (_date.today() - _date.fromisoformat(n.created_at)).days
+            except ValueError:
+                age = 0
+            color = _PCOLORS.get(n.priority, "#636e72")
+            badge = f'<span class="badge" style="background:{color};color:#fff">{n.priority}</span>'
+            rows.append(
+                f'<tr><td>{badge}</td>'
+                f'<td style="font-size:.85rem">{n.message}</td>'
+                f'<td style="color:var(--text-dim);font-size:.8rem">{age}d</td>'
+                f'<td style="font-size:.75rem;color:var(--text-dim)">{n.id}</td></tr>'
+            )
+        extra = len(items) - len(shown)
+        footer = ""
+        if extra > 0:
+            footer = f'<p style="color:var(--text-dim);font-size:.8rem;margin-top:.4rem">{extra} more — see governance/notifications.md</p>'
+        return (
+            '<div class="card" style="border-left-color:var(--red)">'
+            f'<h2>Governor Notifications <span class="badge badge-critical">{len(items)} pending</span></h2>'
+            '<table><thead><tr><th>Priority</th><th>Message</th><th>Age</th><th>ID</th></tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>{footer}'
+            '</div>'
+        )
+    except Exception:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Governor Notifications</h2>'
+            '<p style="color:var(--text-dim)">Notifications unavailable — '
+            'run <code>python sdk/notification_manager.py list</code></p>'
+            '</div>'
+        )
+
+
+def _render_proposals_widget(index_path: "Path | None") -> str:
+    """Render the proposals widget HTML from governance/proposals/index.md.
+
+    Shows: pending count badge + table of last 5 proposals.
+    """
+    from pathlib import Path as _Path
+    if index_path is None or not _Path(str(index_path)).exists():
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Learning Loop — Proposals</h2>'
+            '<p style="color:var(--text-dim)">Proposals index not found &mdash; '
+            'run <code>python sdk/protocol_updater.py --arch-root .</code></p>'
+            '</div>'
+        )
+
+    import re as _re
+    text = _Path(str(index_path)).read_text(encoding="utf-8", errors="replace")
+
+    # Parse table rows: | date | [id](path) | pattern | target | status |
+    rows = _re.findall(
+        r"^\|\s*(\S+)\s*\|\s*\[([^\]]+)\]\([^)]+\)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*(\S+)\s*\|",
+        text, _re.MULTILINE
+    )
+
+    if not rows:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Learning Loop — Proposals</h2>'
+            '<p style="color:var(--text-dim)">No proposals yet — learning loop is quiet.</p>'
+            '</div>'
+        )
+
+    pending_count = sum(1 for *_, status in rows if status.strip() == "pending")
+    badge_color = "var(--orange)" if pending_count > 0 else "var(--green)"
+    badge = f'<span class="badge" style="background:{badge_color};color:#fff">{pending_count} pending</span>'
+
+    # Last 5 proposals
+    recent = rows[-5:]
+    table_rows = "\n".join(
+        f'<tr><td>{r[0]}</td><td style="font-size:.8rem">{r[1]}</td>'
+        f'<td style="font-size:.8rem">{r[2].strip()}</td>'
+        f'<td><span class="badge badge-{"warning" if r[4].strip()=="pending" else "done"}">'
+        f'{r[4].strip()}</span></td></tr>'
+        for r in recent
+    )
+
+    return (
+        '<div class="card" style="border-left-color:var(--orange)">'
+        f'<h2>Learning Loop — Proposals {badge}</h2>'
+        '<table>'
+        '<thead><tr><th>Date</th><th>ID</th><th>Pattern</th><th>Status</th></tr></thead>'
+        f'<tbody>{table_rows}</tbody>'
+        '</table>'
+        '</div>'
+    )
+
+
+def _render_adr_widget(index_path: "Path | None") -> str:
+    """Render the ADR widget HTML from governance/adrs/index.md.
+
+    Shows: total ADRs, last ADR date, count by status.
+    """
+    from pathlib import Path as _Path
+    if index_path is None or not _Path(str(index_path)).exists():
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Architecture Decisions (ADRs)</h2>'
+            '<p style="color:var(--text-dim)">ADR index not found &mdash; '
+            'run <code>python sdk/adr_drafter.py --rebuild-index --arch-root .</code></p>'
+            '</div>'
+        )
+
+    import re as _re
+    text = _Path(str(index_path)).read_text(encoding="utf-8", errors="replace")
+
+    # Parse table rows: | date | [title](path) | status |
+    rows = _re.findall(r"^\|\s*(\S+)\s*\|\s*\[([^\]]+)\]\([^)]+\)\s*\|\s*(\S+)\s*\|", text, _re.MULTILINE)
+    if not rows:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Architecture Decisions (ADRs)</h2>'
+            '<p style="color:var(--text-dim)">No ADRs recorded yet.</p>'
+            '</div>'
+        )
+
+    total = len(rows)
+    last_date = max(r[0] for r in rows)
+    status_counts: dict[str, int] = {}
+    for _, _, status in rows:
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    status_badges = " ".join(
+        f'<span class="badge badge-planned" style="margin-right:.3rem">'
+        f'{s}: {c}</span>'
+        for s, c in sorted(status_counts.items())
+    )
+
+    return (
+        '<div class="card card-teal">'
+        '<h2>Architecture Decisions (ADRs)</h2>'
+        f'<p>Total ADRs: <strong>{total}</strong> &nbsp;|&nbsp; Last: <strong>{last_date}</strong></p>'
+        f'<p>{status_badges}</p>'
+        '</div>'
+    )
+
+
+def _render_token_widget(
+    records: list | None,
+    budget: int | None = None,
+) -> str:
+    """Render the token widget HTML (pure function — no file I/O). Used in render_html().
+
+    records: list of TokenRecord-like objects with tok_actual, tok_estimated, date, block_id fields.
+    budget: optional phase-level token budget for comparison.
+    """
+    if records is None:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Token Usage</h2>'
+            '<p style="color:var(--text-dim)">Token report not found &mdash; '
+            'run <code>python sdk/token_tracker.py --arch-root .</code></p>'
+            '</div>'
+        )
+
+    tracked = [r for r in records if getattr(r, "tok_actual", None) is not None]
+
+    if len(tracked) < 3:
+        count_msg = f"{len(tracked)} block(s) with tok_actual"
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            f'<h2>Token Usage</h2>'
+            f'<p style="color:var(--text-dim)">Insufficient data ({count_msg}) &mdash; '
+            'need &ge;3 blocks for chart.</p>'
+            '</div>'
+        )
+
+    # Last 7 blocks with tok_actual for the bar chart
+    recent = tracked[-7:]
+    max_val = max(r.tok_actual for r in recent) or 1
+
+    bars = ""
+    for r in recent:
+        pct = int(r.tok_actual / max_val * 100)
+        bars += (
+            f'<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">'
+            f'<span style="width:80px;font-size:.75rem;color:var(--text-dim);text-align:right">'
+            f'{r.block_id}</span>'
+            f'<div style="background:var(--purple);height:14px;width:{pct}%;'
+            f'border-radius:2px;min-width:2px"></div>'
+            f'<span style="font-size:.75rem">{r.tok_actual:,}</span>'
+            f'</div>'
+        )
+
+    # Phase totals
+    total_actual = sum(r.tok_actual for r in tracked)
+    total_est = sum(r.tok_estimated for r in tracked if getattr(r, "tok_estimated", None) is not None)
+    budget_line = ""
+    if budget:
+        budget_pct = int(total_actual / budget * 100)
+        budget_color = "var(--red)" if budget_pct > 100 else "var(--green)"
+        budget_line = (
+            f'<p style="margin-top:.5rem">Budget: '
+            f'<strong style="color:{budget_color}">{total_actual:,} / {budget:,}</strong>'
+            f' ({budget_pct}%)</p>'
+        )
+
+    # Projection (avg per block × remaining_estimate)
+    avg = total_actual / len(tracked)
+    projection_line = f'<p>Avg/block: <strong>{avg:,.0f}</strong> tokens</p>'
+
+    return (
+        '<div class="card" style="border-left-color:var(--purple)">'
+        '<h2>Token Usage (last 7 blocks)</h2>'
+        f'{bars}'
+        f'<p style="margin-top:.5rem">Total tok_actual: <strong>{total_actual:,}</strong>'
+        + (f' &nbsp;|&nbsp; tok_estimated: {total_est:,}' if total_est else '')
+        + f'</p>'
+        f'{budget_line}'
+        f'{projection_line}'
+        '</div>'
+    )
+
+
+def render_html(data: DashboardData, css: Optional[str] = None) -> str:
+    """Render DashboardData as a standalone HTML page (no CDN, dark theme)."""
+
+    styles = css if css is not None else _FALLBACK_CSS
+
+    def _row(label: str, value: str) -> str:
+        return f"<tr><td>{label}</td><td><strong>{value}</strong></td></tr>"
+
+    # -- Column 1: Active Agents --
+    def _status_badge(status: str) -> str:
+        cls = (
+            "badge-active"  if status in ("wip", "wait") else
+            "badge-done"    if status == "done" else
+            "badge-planned"
+        )
+        return f'<span class="badge {cls}">{status}</span>'
+
+    if data.agents:
+        agent_rows = "\n".join(
+            f"<tr><td>{a.agent_id}</td><td>{a.block}</td>"
+            f"<td>{_status_badge(a.status)}</td><td>{a.last_done}</td></tr>"
+            for a in data.agents
+        )
+    else:
+        agent_rows = "<tr><td colspan='4'><em>no agents</em></td></tr>"
+
+    # -- Column 3: Health Metrics --
+    vel = (
+        f"{data.velocity_blocks_per_day:.2f}/d"
+        if data.velocity_blocks_per_day is not None else "n/a"
+    )
+    fcast = (
+        f"~{data.forecast_blocks_next_7d}"
+        if data.forecast_blocks_next_7d is not None else "n/a"
+    )
+    stale_cls = (
+        "badge-critical" if data.critical_tool_ids else
+        "badge-warning"  if data.stale_tool_count > 0 else
+        "badge-done"
+    )
+    stale_val = f'<span class="badge {stale_cls}">{data.stale_tool_count}</span>'
+
+    # -- Column 4: Recent Patterns --
+    pattern_items = (
+        "\n".join(f"<li>{p}</li>" for p in data.recent_patterns)
+        if data.recent_patterns
+        else "<li><em>none detected</em></li>"
+    )
+
+    # -- Timeline --
+    if data.timeline_entries:
+        tl_items = "\n".join(
+            f'<li><span class="dot done"></span>'
+            f'<div><strong>{b}</strong>'
+            f' <span style="color:var(--text-dim)">{d}</span></div></li>'
+            for d, b in data.timeline_entries[:20]
+        )
+    else:
+        tl_items = "<li><em>No activity in last 7 days</em></li>"
+
+    # -- Roadmap --
+    def _pill(phase_num: str, cls: str) -> str:
+        return f'<span class="phase-pill {cls}">Phase {phase_num}</span>\n'
+
+    roadmap = (
+        "".join(_pill(p, "done")    for p in data.phases_done)
+        + "".join(_pill(p, "active")  for p in data.phases_active)
+        + "".join(_pill(p, "planned") for p in data.phases_planned)
+    )
+
+    manifest_name = (
+        data.manifest.split("/")[-1]
+        if "/" in data.manifest else data.manifest
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cognitive Architecture — Live Dashboard</title>
+  <style>
+{styles}
+  </style>
+</head>
+<body>
+  <h1>&#x1F9E0; Cognitive Architecture — Dashboard</h1>
+  <p class="meta">Phase {data.current_phase} &nbsp;&middot;&nbsp;
+     Last: {data.last_block} &nbsp;&middot;&nbsp; {data.generated_at[:10]}</p>
+
+  <div class="dash-grid">
+
+    <!-- Column 1: Active Agents -->
+    <div class="card card-teal">
+      <h2>Active Agents</h2>
+      <table>
+        <thead><tr><th>Agent</th><th>Block</th><th>Status</th><th>Last Done</th></tr></thead>
+        <tbody>{agent_rows}</tbody>
+      </table>
+    </div>
+
+    <!-- Column 2: Next Actions -->
+    <div class="card card-gold">
+      <h2>Next Actions</h2>
+      <table>
+        {_row("Next action", data.next_action)}
+        {_row("Manifest", manifest_name)}
+        {_row("Last block", data.last_block)}
+        {_row("Phase", data.current_phase)}
+      </table>
+    </div>
+
+    <!-- Column 3: Health Metrics -->
+    <div class="card">
+      <h2>Health Metrics</h2>
+      <table>
+        {_row("Blocks (7d)", str(len(data.blocks_closed_7d)))}
+        {_row("Velocity", vel)}
+        {_row("Forecast (7d)", fcast)}
+        {_row("Stale tools", stale_val)}
+      </table>
+    </div>
+
+    <!-- Column 4: Recent Patterns -->
+    <div class="card card-green">
+      <h2>Recent Patterns</h2>
+      <ul>{pattern_items}</ul>
+    </div>
+
+  </div>
+
+  <!-- Timeline -->
+  <div class="card">
+    <h2>Timeline &mdash; Last 7 Days</h2>
+    <ul class="timeline">
+      {tl_items}
+    </ul>
+  </div>
+
+  <!-- Roadmap -->
+  <div class="card card-gold">
+    <h2>Roadmap</h2>
+    <div class="phase-row">
+      {roadmap}
+    </div>
+  </div>
+
+  <!-- ADR Widget -->
+  {_render_adr_widget(getattr(data, "adr_index_path", None))}
+
+  <!-- Token Widget -->
+  {_render_token_widget(getattr(data, "token_records", None), getattr(data, "token_budget", None))}
+
+  <!-- Proposals Widget -->
+  {_render_proposals_widget(getattr(data, "proposals_index_path", None))}
+
+  <!-- Governor Notifications Widget -->
+  {_render_notifications_widget(getattr(data, "_arch_root", None))}
+
+  <!-- Footer: Quick Commands -->
+  <div class="card" style="border-left-color:var(--grey)">
+    <h2>Quick Commands</h2>
+    <table>
+      {_row("Regenerate dashboard", "<code>python sdk/dashboard_generator.py --arch-root .</code>")}
+      {_row("Weekly report",        "<code>python sdk/weekly_report.py --arch-root .</code>")}
+      {_row("Check schedule",       "<code>python sdk/master_scheduler.py --arch-root . --report</code>")}
+      {_row("Run audit",            "<code>bash audit.sh</code>")}
+    </table>
+  </div>
+
+  <p class="generated">Generated {data.generated_at}</p>
+</body>
+</html>"""
+
+
+def write_dashboard(
+    data: DashboardData,
+    arch_root: Optional[str] = None,
+) -> Path:
+    """
+    Write dashboard HTML to governance/dashboard.html.
+    Reads templates/_styles.css if available; falls back to embedded CSS.
+    Returns the output path.
+    """
+    root = _arch_path(arch_root)
+
+    # Try to load shared styles for standalone HTML
+    css: Optional[str] = None
+    try:
+        css = (root / STYLES_PATH).read_text(encoding="utf-8")
+    except OSError:
+        css = None  # render_html will use _FALLBACK_CSS
+
+    out_path = root / DASHBOARD_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(render_html(data, css=css), encoding="utf-8")
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Live dashboard generator")
+    parser.add_argument("--arch-root", default=".", help="Root of cognitive-arch project")
+    parser.add_argument("--stdout", action="store_true", help="Print HTML to stdout instead of writing file")
+    args = parser.parse_args()
+
+    data = generate_dashboard(arch_root=args.arch_root)
+    if args.stdout:
+        print(render_html(data))
+    else:
+        path = write_dashboard(data, arch_root=args.arch_root)
+        print(f"Dashboard written: {path}")

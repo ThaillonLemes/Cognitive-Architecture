@@ -1,0 +1,57 @@
+# Template: agent-message.yaml
+# Three example messages (request, notification, response) — one block each.
+# Validator: sdk/agent_message_schema.py
+# Protocol:  protocols/inter-agent-messages.md
+
+---
+# --- Example 1: REQUEST ---
+# Master asks implementer for block status.
+schema_version: "1.0"
+from: "master"
+to: "implementer"
+kind: request
+sent_at: "2026-05-27T12:00:00+00:00"
+payload:
+  action: block_status
+  args:
+    block_id: block-101
+expects_response: true
+correlation_id: "req-2026-05-27-001"
+deadline: "2026-05-27T18:00:00+00:00"
+
+---
+# --- Example 2: NOTIFICATION ---
+# Master notifies implementer that a tool is overdue.
+# No response expected.
+schema_version: "1.0"
+from: "master"
+to: "implementer"
+kind: notification
+sent_at: "2026-05-27T12:05:00+00:00"
+payload:
+  event: tool_overdue
+  data:
+    tool_id: audit
+    days_overdue: 3.1
+    urgency: critical
+    command: "bash audit.sh"
+expects_response: false
+
+---
+# --- Example 3: RESPONSE ---
+# Implementer replies to the block_status request.
+# correlation_id matches the request.
+schema_version: "1.0"
+from: "implementer"
+to: "master"
+kind: response
+sent_at: "2026-05-27T12:01:30+00:00"
+payload:
+  status: ok
+  result:
+    block_id: block-101
+    board_status: wip
+    gates_passed: 2
+    gates_total: 4
+correlation_id: "req-2026-05-27-001"
+expects_response: false
