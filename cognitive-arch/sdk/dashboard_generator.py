@@ -137,6 +137,53 @@ def _arch_path(arch_root: Optional[str]) -> Path:
     return Path(arch_root) if arch_root is not None else Path.cwd()
 
 
+def _read_ux_config(arch_root: Optional[str] = None) -> dict:
+    """Read governance/ux-config.yaml. Returns defaults on missing/parse error."""
+    defaults = {"dashboard_link_protocol": "file", "dashboard_links_enabled": True,
+                "dashboard_notifications_max": 3}
+    root = _arch_path(arch_root)
+    config_path = root / "governance" / "ux-config.yaml"
+    try:
+        text = config_path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("#") or ":" not in line:
+                continue
+            k, _, v = line.partition(":")
+            k, v = k.strip(), v.strip()
+            if k == "dashboard_link_protocol":
+                defaults[k] = v
+            elif k in ("dashboard_links_enabled",):
+                defaults[k] = v.lower() not in ("false", "0", "no")
+            elif k == "dashboard_notifications_max":
+                try:
+                    defaults[k] = int(v)
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    return defaults
+
+
+def _linkify_path(path_str: str, protocol: str = "file", arch_root: Optional[Path] = None) -> str:
+    """Wrap a local file path string in an HTML anchor tag.
+
+    protocol: 'file' → file:///abs/path, 'vscode' → vscode://file/abs/path
+    Normalizes backslashes for URL. Returns original string if path is empty.
+    """
+    if not path_str or path_str in ("-", "~", "unknown", "?"):
+        return path_str
+    p = Path(path_str) if arch_root is None else arch_root / path_str
+    url_path = str(p).replace("\\", "/")
+    if not url_path.startswith("/"):
+        url_path = "/" + url_path
+    if protocol == "vscode":
+        href = f"vscode://file{url_path}"
+    else:
+        href = f"file://{url_path}"
+    return f'<a href="{href}" title="{path_str}">{path_str}</a>'
+
+
 def _read_file(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -353,6 +400,64 @@ def generate_dashboard(
         phases_active=phases_active,
         phases_planned=phases_planned,
     )
+
+
+def _render_notifications_widget(arch_root: "Path | str | None") -> str:
+    """Render the governor notifications widget. Shows top N pending by priority."""
+    _PCOLORS = {"critical": "#d63031", "high": "#e17055", "medium": "#f9ca24", "low": "#6c5ce7"}
+    _PORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    try:
+        from pathlib import Path as _Path
+        root = _Path(str(arch_root)) if arch_root is not None else _Path.cwd()
+        import sys as _sys
+        _sys.path.insert(0, str(root / "sdk"))
+        from notification_manager import Governor
+        ux = _read_ux_config(str(root))
+        max_n = ux.get("dashboard_notifications_max", 3)
+        items = [n for n in Governor(root).list(pending_only=True)]
+        if not items:
+            return (
+                '<div class="card card-green">'
+                '<h2>Governor Notifications</h2>'
+                '<p style="color:var(--green)">No pending notifications — system quiet.</p>'
+                '</div>'
+            )
+        items.sort(key=lambda n: (_PORDER.get(n.priority, 9), n.created_at))
+        shown = items[:max_n]
+        from datetime import date as _date
+        rows = []
+        for n in shown:
+            try:
+                age = (_date.today() - _date.fromisoformat(n.created_at)).days
+            except ValueError:
+                age = 0
+            color = _PCOLORS.get(n.priority, "#636e72")
+            badge = f'<span class="badge" style="background:{color};color:#fff">{n.priority}</span>'
+            rows.append(
+                f'<tr><td>{badge}</td>'
+                f'<td style="font-size:.85rem">{n.message}</td>'
+                f'<td style="color:var(--text-dim);font-size:.8rem">{age}d</td>'
+                f'<td style="font-size:.75rem;color:var(--text-dim)">{n.id}</td></tr>'
+            )
+        extra = len(items) - len(shown)
+        footer = ""
+        if extra > 0:
+            footer = f'<p style="color:var(--text-dim);font-size:.8rem;margin-top:.4rem">{extra} more — see governance/notifications.md</p>'
+        return (
+            '<div class="card" style="border-left-color:var(--red)">'
+            f'<h2>Governor Notifications <span class="badge badge-critical">{len(items)} pending</span></h2>'
+            '<table><thead><tr><th>Priority</th><th>Message</th><th>Age</th><th>ID</th></tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>{footer}'
+            '</div>'
+        )
+    except Exception:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Governor Notifications</h2>'
+            '<p style="color:var(--text-dim)">Notifications unavailable — '
+            'run <code>python sdk/notification_manager.py list</code></p>'
+            '</div>'
+        )
 
 
 def _render_proposals_widget(index_path: "Path | None") -> str:
@@ -693,6 +798,9 @@ def render_html(data: DashboardData, css: Optional[str] = None) -> str:
 
   <!-- Proposals Widget -->
   {_render_proposals_widget(getattr(data, "proposals_index_path", None))}
+
+  <!-- Governor Notifications Widget -->
+  {_render_notifications_widget(getattr(data, "_arch_root", None))}
 
   <!-- Footer: Quick Commands -->
   <div class="card" style="border-left-color:var(--grey)">

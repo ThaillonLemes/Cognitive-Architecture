@@ -1,179 +1,160 @@
-# BOOTSTRAP — first-session interactive flow (new projects)
+# BOOTSTRAP — first-session flow (new projects)
+# v2 — updated Phase 22. Original archived as BOOTSTRAP-v1.md.
 
-BRIEF: this file guides the AI through the first session of a NEW (empty) project. For projects that ALREADY have code, use `RETROFIT.md` instead.
+BRIEF: Run on first session of a NEW (empty) project. For existing projects with code, use RETROFIT.md.
 
-## When to run BOOTSTRAP (vs RETROFIT)
+## Detection
 
-Read BOOTSTRAP when ALL of:
-- The project has NO source code outside `cognitive-arch/`
-- `STATE.md` has `status:bootstrap`
+Run BOOTSTRAP when ALL of:
+- No source code outside `cognitive-arch/`
+- `STATE.md` has `status:bootstrap` or `STATE.md` is missing
 - `PROJECT.md` has unfilled placeholders
 
-Read **RETROFIT.md** instead when ANY of:
-- The project has existing source code (`src/`, `app/`, `lib/`, etc.)
-- Existing docs (README.md beyond a placeholder, ARCHITECTURE.md, etc.)
-- Git history with real development activity
-- Existing tests, build scripts, CI
-
-If unsure: ask the user "Is this a brand-new project from zero, or an existing project?"
-
-## When to run (after the distinction)
-
-If it IS a new project, BOOTSTRAP runs when ANY of:
-- User says "oi", "hello", "hi", "começar", "let's start", or similar opener
-- User explicitly asks: "where do we start?", "what do I do first?"
-
-## Mode for this flow
-
-Use `guidance` mode (see `protocols/modes.md`). Conversational, friendly, ask one thing at a time. This is the ONE place where chatty is correct.
-
-## Flow
-
-### Step 0 — Greet and orient
-
-Greet the user. Briefly explain what this is (1-2 sentences):
-> "This is a cognitive architecture for AI-assisted projects. We'll set up your project together — first identity, then domain, then your first block of work. Take 10-15 minutes."
-
-Offer a quick tour:
-> "Want a 2-minute tour of the structure, or jump straight to Phase 0?"
-
-If tour: walk through the folder map (from `README.md`), highlight `phases/`, `manifests/`, `design/`, `commands/`. Then move on.
-
-### Step 1 — Fill PROJECT.md (project identity)
-
-Ask the user, one question at a time. Confirm understanding before writing.
-
-1. "What's the project name?"
-2. "What type is it? (web app, SaaS, game, CLI, library, mobile, desktop, other)"
-3. "What's the primary language? (e.g., TypeScript, Python, Rust, Go, C++)"
-4. "What framework, if any? (e.g., Next.js, FastAPI, Bevy)"
-5. "What's the build command?"
-6. "What's the test command?"
-7. "What's the lint command?"
-8. "Describe the project in one paragraph — what does it deliver?"
-9. "Who are the target users? Be specific."
-10. "What are the key constraints? (performance, security, compliance, latency, etc.)"
-
-After all 10 answers, write `PROJECT.md` with the filled values. Update `STATE.md` to reflect `status:active`.
-
-### Step 2 — Walk through Phase 0 templates
-
-Open and fill, in order:
-
-1. `phase-0/00-project-overview.md` — expanded project overview
-2. `phase-0/01-stack-and-tools.md` — stack details, tools, environment
-3. `phase-0/02-domain-overview.md` — gateway to `design/`; what is the domain?
-4. `phase-0/03-roadmap-draft.md` — phases envisioned (high-level)
-
-For each: ask user, fill in, save. Keep it light — these are skeletons, not exhaustive docs.
-
-### Step 3 — Generate first phase
-
-Once Phase 0 is complete:
-
-1. Read `protocols/phase-generation.md`.
-2. Use the user's roadmap from `03-roadmap-draft.md` to write `phases/phase-1.md`.
-3. Identify parallel groups within Phase 1 (per `protocols/parallelism.md`).
-4. Update `STATE.md`: `p:1 status:planned`.
-5. Update `NEXT.md` to point to phase-1 first block.
-6. Update `INDEX.md` if new files added to catalog.
-
-### Step 4 — Offer multi-agent setup
-
-Look at `phases/phase-1.md` parallel_execution_plan. If multiple parallel groups exist:
-
-Tell the user:
-> "Phase 1 has N parallel groups. You can spawn up to N agents to work in parallel (faster), OR run sequentially with 1 agent (simpler). Which do you want?"
-
-If multi-agent:
-- Read `templates/agent-roles/implementer.md` and `protocols/agents.md`.
-- Generate `agents/agent-1a.md`, `agents/agent-1b.md`, ... one per parallel group.
-- Generate a Governor session: `agents/governor.md` from `templates/agent-roles/governor.md`.
-- Output a list of "boot prompts" the user can paste into each new Claude Code session.
-
-If single-agent:
-- Generate just one AGENT.md (or none — user uses default implementer behavior).
-
-### Step 5 — Hand off to block work
-
-Tell the user:
-> "Phase 1 is planned. Block 001 manifest is ready. To start work, follow `commands/block-start.md`. If you want me to start it now, say 'start'."
-
-Mark BOOTSTRAP as complete by updating `STATE.md`: `status:active`. BOOTSTRAP.md is not re-read in subsequent sessions.
-
-## After BOOTSTRAP
-
-- `PROJECT.md` is filled
-- `phase-0/` files filled
-- `design/` has at least placeholder `02-domain-overview.md`
-- `phases/phase-1.md` exists
-- `STATE.md` reflects Phase 1
-- (Optional) Multi-agent files in `agents/`
-- The AI returns to normal flow: read PROTOCOLS → STATE → NEXT → block manifest.
-
-## Notes for the AI conducting BOOTSTRAP
-
-- Confirm understanding before writing files. Echo back the user's answer in your own words.
-- If the user is vague, ask follow-ups. Don't invent values.
-- If the user wants to skip a section, allow it but warn what context is being lost.
-- Save incremental progress. If the user pauses, they can resume at any step.
-- BOOTSTRAP runs ONCE per project. Do not re-prompt in later sessions.
+Run RETROFIT.md if ANY of: existing `src/`, `app/`, `lib/`; existing README with content; real git history; existing tests or build scripts.
 
 ---
 
-## Appendix A — Governor v2 (optional SDK tier)
+## Step 0 — Session init (MANDATORY)
 
-> Added in v2.0 (Phase 6). Ask after Step 4 (multi-agent setup decision).
-
-After the user decides between single-agent and multi-agent (Step 4), ask:
-
-> "Do you want to use the Governor v2 SDK for automated block dispatch? It requires Python 3.9+ and an Anthropic API key — but it lets the Governor spawn sub-agents and update state files automatically. Or you can stay in manual mode (the default) where the AI handles everything in the current session."
-
-### Governor mode: `manual` (default — recommended to start)
-
-No extra steps. The AI reads manifests and executes blocks in the current session. Works in any editor or LLM. **Start here.**
-
-Update `STATE.md` after PROJECT.md is saved:
+Run before anything else:
+```bash
+python sdk/session_start.py --arch-root .
 ```
-governor_mode:manual
+
+Read output. Note: health score, active patterns, pending proposals, governor notifications.
+
+---
+
+## Step 1 — Project identity (PROJECT.md)
+
+Ask the user one question at a time. Confirm before writing.
+
+1. Project name?
+2. Type? (web app / SaaS / game / CLI / library / mobile / desktop / other)
+3. Primary language? (TypeScript / Python / Rust / Go / C++ / other)
+4. Framework, if any?
+5. Build command?
+6. Test command?
+7. Lint command?
+8. Project description — one paragraph: what does it deliver?
+9. Target users — be specific.
+10. Key constraints? (performance / security / compliance / latency)
+
+Write `PROJECT.md` with filled values. Then:
+```bash
+python sdk/state_manager.py --set-state "status:active phase:0"
 ```
-(If the field is already there, leave it. If absent, add it.)
 
-### Governor mode: `sdk` (automated dispatch — optional)
+---
 
-Enable when the user explicitly wants autonomous multi-block execution:
+## Step 2 — Phase 0 templates
 
-1. **Install SDK dependencies:**
+Fill in order (ask user → write file):
+
+1. `phase-0/00-project-overview.md` — expanded overview
+2. `phase-0/01-stack-and-tools.md` — stack, env vars, commands
+3. `phase-0/02-domain-overview.md` — domain entities and main flows
+4. `phase-0/03-roadmap-draft.md` — phases envisioned (high-level)
+
+---
+
+## Step 3 — Generate Phase 1
+
+1. Read `protocols/phase-generation.md`
+2. Write `phases/phase-1.md` from user's roadmap
+3. Identify parallel groups (see `protocols/parallelism.md`)
+4. Update state:
    ```bash
-   pip install -r cognitive-arch/sdk/requirements.txt
+   python sdk/state_manager.py --set-state "p:1 status:planned phase:phase-1"
+   python sdk/state_manager.py --set-next "next_action:block-001 phase:phase-1"
    ```
+5. Update `INDEX.md` for new files
 
-2. **Set your Anthropic API key:**
-   ```bash
-   export ANTHROPIC_API_KEY=sk-ant-...
-   ```
-   Get at [console.anthropic.com/settings/api-keys](https://console.anthropic.com/settings/api-keys). Billed separately from Claude Max.
+---
 
-3. **Update STATE.md:**
-   ```
-   governor_mode:sdk
-   ```
+## Step 4 — Governor mode choice
 
-4. **Verify:**
-   ```bash
-   python cognitive-arch/sdk/governor.py --mode sdk --dry-run
-   ```
+Ask: "Manual (default) or SDK mode for the Governor?"
 
-### What to tell the user
-
+**Manual** (recommended): no extra setup. AI reads manifests and executes blocks in this session.
 ```
-Governor modes:
-  manual (default) — AI runs blocks in this session. Zero extra setup.
-  sdk — Governor auto-dispatches sub-agents via Anthropic API. Needs Python + API key.
-
-Recommendation: start with manual. Switch to sdk when you want autonomous execution.
+STATE.md entry: governor_mode:manual
 ```
 
-See `RETROFIT.md Appendix A` for the full env-vars table and `design/governor-v2.md` for architecture detail.
+**SDK mode**: autonomous sub-agent dispatch. Requires Python 3.9+ and Anthropic API key.
+```bash
+pip install -r sdk/requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+python sdk/governor.py --mode sdk --dry-run   # verify
+```
+Then set `governor_mode:sdk` in STATE.md.
 
-End of BOOTSTRAP.md.
+---
+
+## Step 5 — Multi-agent setup (if parallel groups in Phase 1)
+
+If Phase 1 has parallel groups and user wants multi-agent:
+- Read `templates/agent-roles/implementer.md` and `protocols/agents.md`
+- Generate `agents/agent-1a.md`, `agents/agent-1b.md`, … per group
+- Generate `agents/governor.md` from `templates/agent-roles/governor.md`
+- Output boot prompts for each session
+
+Otherwise: one agent, sequential execution.
+
+---
+
+## Step 6 — Notifications check
+
+Before handing off, check governor notifications:
+```bash
+python sdk/notification_manager.py list --pending
+```
+
+If any critical/high: surface to user before starting block work.
+
+---
+
+## Step 7 — Hand off
+
+State: `STATE.md` is `status:active`. BOOTSTRAP is complete — not re-read in subsequent sessions.
+
+To start block work: follow `commands/block-start.md`.
+
+To close a block: follow `commands/block-close.md` (uses `sdk/block_close.py`).
+
+---
+
+## After BOOTSTRAP
+
+- `PROJECT.md` filled
+- `phase-0/` filled
+- `phases/phase-1.md` exists with planned blocks
+- `STATE.md`: `status:active phase:1`
+- Governor mode set
+- Notifications queue checked
+
+Normal flow resumes: read PROTOCOLS → STATE → NEXT → block manifest.
+
+---
+
+## Rules
+
+- Confirm understanding before writing files. Echo user's answer before writing.
+- If user is vague, ask follow-up. Never invent values.
+- Save incrementally. User can resume at any step.
+- BOOTSTRAP runs ONCE per project.
+- All file edits via SDK tools (`state_manager.py`, `block_close.py`) — not manual text editing.
+
+---
+
+## SDK tool reference
+
+| Operation | Command |
+|-----------|---------|
+| Session init | `python sdk/session_start.py --arch-root .` |
+| Update state | `python sdk/state_manager.py --set-state "key:val"` |
+| Update next | `python sdk/state_manager.py --set-next "key:val"` |
+| Close block | `python sdk/block_close.py --block-id X --next Y --actual-hours N` |
+| Check notifications | `python sdk/notification_manager.py list --pending` |
+| Generate dashboard | `python sdk/dashboard_generator.py --arch-root .` |
+| Run health report | `python sdk/health_report.py --arch-root .` |
