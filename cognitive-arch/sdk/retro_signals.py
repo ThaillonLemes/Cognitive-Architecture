@@ -176,6 +176,77 @@ def _log_failure(path: str, reason: str) -> None:
         f.write(f"{path}: {reason}\n")
 
 
+# ---------------------------------------------------------------------------
+# Token signals (Phase 18 — block-116)
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass
+class TokenSignal:
+    block_id: str
+    tok_estimated: Optional[int]
+    tok_actual: Optional[int]
+    delta_pct: Optional[float]   # (tok_actual - tok_estimated) / tok_estimated * 100; None if either missing
+    date: str
+
+
+_TOK_ESTIMATED_PATTERN = re.compile(r"^tok_estimated:\s*([0-9]+)", re.MULTILINE)
+_TOK_ACTUAL_PATTERN = re.compile(r"^(?:tok_actual|tok-actual|tokens_actual):\s*([0-9]+)", re.MULTILINE)
+_DATE_PATTERN = re.compile(r"^created_at:\s*(\S+)", re.MULTILINE)
+
+
+def extract_token_signals(arch_root: Path) -> list[TokenSignal]:
+    """Extract token usage signals from all block retrospectives in blocks/.
+
+    Only includes blocks where at least tok_actual is present.
+    """
+    blocks_dir = arch_root / "blocks"
+    signals: list[TokenSignal] = []
+
+    for retro_file in sorted(blocks_dir.glob("block-*-*.md")):
+        if "LOG" in retro_file.name.upper():
+            continue
+        try:
+            text = retro_file.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        fm = _extract_frontmatter(text)
+        id_m = _ID_PATTERN.search(fm)
+        block_id = id_m.group(1) if id_m else re.match(r"(block-\d+)", retro_file.name)
+        if hasattr(block_id, "group"):
+            block_id = block_id.group(1)
+        if not block_id:
+            continue
+
+        est_m = _TOK_ESTIMATED_PATTERN.search(fm)
+        act_m = _TOK_ACTUAL_PATTERN.search(fm)
+        date_m = _DATE_PATTERN.search(fm)
+
+        tok_estimated = int(est_m.group(1)) if est_m else None
+        tok_actual = int(act_m.group(1)) if act_m else None
+        date_str = date_m.group(1) if date_m else ""
+
+        if tok_actual is None:
+            continue  # skip blocks without tok_actual
+
+        delta_pct: Optional[float] = None
+        if tok_estimated is not None and tok_estimated > 0:
+            delta_pct = (tok_actual - tok_estimated) / tok_estimated * 100.0
+
+        signals.append(TokenSignal(
+            block_id=str(block_id),
+            tok_estimated=tok_estimated,
+            tok_actual=tok_actual,
+            delta_pct=delta_pct,
+            date=date_str,
+        ))
+
+    return signals
+
+
 if __name__ == "__main__":
     import sys
     arch_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent

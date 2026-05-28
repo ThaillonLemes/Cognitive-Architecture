@@ -355,6 +355,83 @@ def generate_dashboard(
     )
 
 
+def _render_token_widget(
+    records: list | None,
+    budget: int | None = None,
+) -> str:
+    """Render the token widget HTML (pure function — no file I/O). Used in render_html().
+
+    records: list of TokenRecord-like objects with tok_actual, tok_estimated, date, block_id fields.
+    budget: optional phase-level token budget for comparison.
+    """
+    if records is None:
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            '<h2>Token Usage</h2>'
+            '<p style="color:var(--text-dim)">Token report not found &mdash; '
+            'run <code>python sdk/token_tracker.py --arch-root .</code></p>'
+            '</div>'
+        )
+
+    tracked = [r for r in records if getattr(r, "tok_actual", None) is not None]
+
+    if len(tracked) < 3:
+        count_msg = f"{len(tracked)} block(s) with tok_actual"
+        return (
+            '<div class="card" style="border-left-color:var(--grey)">'
+            f'<h2>Token Usage</h2>'
+            f'<p style="color:var(--text-dim)">Insufficient data ({count_msg}) &mdash; '
+            'need &ge;3 blocks for chart.</p>'
+            '</div>'
+        )
+
+    # Last 7 blocks with tok_actual for the bar chart
+    recent = tracked[-7:]
+    max_val = max(r.tok_actual for r in recent) or 1
+
+    bars = ""
+    for r in recent:
+        pct = int(r.tok_actual / max_val * 100)
+        bars += (
+            f'<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">'
+            f'<span style="width:80px;font-size:.75rem;color:var(--text-dim);text-align:right">'
+            f'{r.block_id}</span>'
+            f'<div style="background:var(--purple);height:14px;width:{pct}%;'
+            f'border-radius:2px;min-width:2px"></div>'
+            f'<span style="font-size:.75rem">{r.tok_actual:,}</span>'
+            f'</div>'
+        )
+
+    # Phase totals
+    total_actual = sum(r.tok_actual for r in tracked)
+    total_est = sum(r.tok_estimated for r in tracked if getattr(r, "tok_estimated", None) is not None)
+    budget_line = ""
+    if budget:
+        budget_pct = int(total_actual / budget * 100)
+        budget_color = "var(--red)" if budget_pct > 100 else "var(--green)"
+        budget_line = (
+            f'<p style="margin-top:.5rem">Budget: '
+            f'<strong style="color:{budget_color}">{total_actual:,} / {budget:,}</strong>'
+            f' ({budget_pct}%)</p>'
+        )
+
+    # Projection (avg per block × remaining_estimate)
+    avg = total_actual / len(tracked)
+    projection_line = f'<p>Avg/block: <strong>{avg:,.0f}</strong> tokens</p>'
+
+    return (
+        '<div class="card" style="border-left-color:var(--purple)">'
+        '<h2>Token Usage (last 7 blocks)</h2>'
+        f'{bars}'
+        f'<p style="margin-top:.5rem">Total tok_actual: <strong>{total_actual:,}</strong>'
+        + (f' &nbsp;|&nbsp; tok_estimated: {total_est:,}' if total_est else '')
+        + f'</p>'
+        f'{budget_line}'
+        f'{projection_line}'
+        '</div>'
+    )
+
+
 def render_html(data: DashboardData, css: Optional[str] = None) -> str:
     """Render DashboardData as a standalone HTML page (no CDN, dark theme)."""
 
@@ -501,6 +578,9 @@ def render_html(data: DashboardData, css: Optional[str] = None) -> str:
       {roadmap}
     </div>
   </div>
+
+  <!-- Token Widget -->
+  {_render_token_widget(getattr(data, "token_records", None), getattr(data, "token_budget", None))}
 
   <!-- Footer: Quick Commands -->
   <div class="card" style="border-left-color:var(--grey)">

@@ -160,6 +160,37 @@ def _rule_tier_l_overrun(signals: list[RetroSignal]) -> list[Pattern]:
 
 
 # ---------------------------------------------------------------------------
+# Token-based detection (Phase 18 — block-116)
+# ---------------------------------------------------------------------------
+
+def detect_budget_overrun(
+    token_signals: list,
+    threshold_pct: float = 20.0,
+    d1_min: int = THRESHOLD,
+) -> list[Pattern]:
+    """R8: budget-overrun-recurring — token delta > threshold_pct in >= d1_min blocks."""
+    overruns = [
+        s.block_id for s in token_signals
+        if s.delta_pct is not None and s.delta_pct > threshold_pct
+    ]
+    if len(overruns) >= d1_min:
+        return [Pattern(
+            name="budget-overrun-recurring",
+            description=(
+                f"tok_actual exceeded tok_estimated by >{threshold_pct:.0f}% "
+                f"in {len(overruns)} blocks."
+            ),
+            severity="warn",
+            evidence=overruns,
+            first_detected=overruns[0],
+            last_detected=overruns[-1],
+            occurrences=len(overruns),
+            rule_id="R8",
+        )]
+    return []
+
+
+# ---------------------------------------------------------------------------
 # Main analyzer
 # ---------------------------------------------------------------------------
 
