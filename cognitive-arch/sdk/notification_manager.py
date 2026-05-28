@@ -12,12 +12,13 @@ import contextlib
 import re
 import time
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator, Optional
 
 NOTIFICATIONS_PATH = "governance/notifications.md"
 ARCHIVE_PATH = "governance/notifications-archive.md"
+LOG_PATH = "governance/governor-log.md"
 _LOCK_TIMEOUT = 5.0
 
 
@@ -180,6 +181,17 @@ def _write_file(path: Path, items: list[Notification], key: str = "notifications
 # ID generator
 # ---------------------------------------------------------------------------
 
+def _log_event(log_path: Path, event_type: str, notification_id: str, source: str) -> None:
+    """Append one audit line to governor-log.md. Never raises."""
+    try:
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+        line = f"{ts} {event_type} {notification_id} {source}\n"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
 def _make_id(type_: str, today: str, items: list[Notification]) -> str:
     base = f"{type_}-{today}"
     existing = {n.id for n in items}
@@ -200,6 +212,7 @@ class Governor:
         self.arch_root = arch_root
         self.notifications_path = arch_root / NOTIFICATIONS_PATH
         self.archive_path = arch_root / ARCHIVE_PATH
+        self.log_path = arch_root / LOG_PATH
 
     def _load(self) -> list[Notification]:
         return _parse_notifications(_read_file(self.notifications_path))
@@ -223,6 +236,7 @@ class Governor:
             status="pending", source=source, created_at=today,
         ))
         _write_file(self.notifications_path, items)
+        _log_event(self.log_path, "add", nid, source)
         return nid
 
     def list(self, pending_only: bool = False) -> list[Notification]:
@@ -238,6 +252,7 @@ class Governor:
                     n.status = "seen"
                     n.seen_at = today
                 _write_file(self.notifications_path, items)
+                _log_event(self.log_path, "seen", notification_id, "governor")
                 return True
         return False
 
@@ -253,6 +268,7 @@ class Governor:
                 if n.seen_at == "~":
                     n.seen_at = today
                 _write_file(self.notifications_path, items)
+                _log_event(self.log_path, "dismiss", notification_id, "governor")
                 return True, f"Dismissed: {notification_id}"
         return False, f"Not found: {notification_id}"
 
@@ -277,7 +293,44 @@ class Governor:
         )
         archived.extend(to_archive)
         _write_file(self.archive_path, archived, key="notifications_archive")
+        for n in to_archive:
+            _log_event(self.log_path, "archive", n.id, "governor")
         return len(to_archive)
+
+    def rotate_log(self, days: int = 90) -> int:
+        """Move log entries older than days to governor-log-YYYY.md. Returns lines rotated."""
+        if not self.log_path.exists():
+            return 0
+        lines = self.log_path.read_text(encoding="utf-8").splitlines()
+        cutoff = date.today() - timedelta(days=days)
+        keep, rotate = [], {}
+        header_lines = []
+        for line in lines:
+            if line.startswith("#") or not line.strip():
+                header_lines.append(line)
+                continue
+            parts = line.split(" ", 1)
+            try:
+                entry_date = date.fromisoformat(parts[0][:10])
+                if entry_date < cutoff:
+                    year = str(entry_date.year)
+                    rotate.setdefault(year, []).append(line)
+                    continue
+            except (ValueError, IndexError):
+                pass
+            keep.append(line)
+        if not rotate:
+            return 0
+        # Write rotated lines to year-based archive files
+        total = 0
+        for year, rotated_lines in rotate.items():
+            arch = self.log_path.parent / f"governor-log-{year}.md"
+            existing = arch.read_text(encoding="utf-8") if arch.exists() else ""
+            arch.write_text(existing + "\n".join(rotated_lines) + "\n", encoding="utf-8")
+            total += len(rotated_lines)
+        new_content = "\n".join(header_lines + keep) + "\n" if keep else "\n".join(header_lines) + "\n"
+        self.log_path.write_text(new_content, encoding="utf-8")
+        return total
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     arch_p = sub.add_parser("archive-old")
     arch_p.add_argument("--days", type=int, default=30)
 
+    rot_p = sub.add_parser("rotate-log")
+    rot_p.add_argument("--days", type=int, default=90)
+
     args = parser.parse_args(argv)
     root = Path(args.arch_root).resolve()
     gov = Governor(root)
@@ -349,6 +405,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "archive-old":
         n = gov.archive_old(days=args.days)
         print(f"[notification_manager] Archived {n} dismissed notification(s) older than {args.days} days.")
+        return 0
+    if args.cmd == "rotate-log":
+        n = gov.rotate_log(days=args.days)
+        print(f"[notification_manager] Rotated {n} log line(s) older than {args.days} days.")
         return 0
     return 1
 

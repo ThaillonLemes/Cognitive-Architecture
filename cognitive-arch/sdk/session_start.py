@@ -238,6 +238,38 @@ TOOL_RUNNERS = {
 }
 
 
+_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+_MAX_GOVERNOR_DISPLAY = 10
+
+
+def _display_governor_notifications(arch_root: Path) -> None:
+    """Display pending+seen governor notifications. Never raises."""
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        from notification_manager import Governor
+        from datetime import date as _date
+        gov = Governor(arch_root)
+        items = [n for n in gov.list(pending_only=False) if n.status in ("pending", "seen")]
+        if not items:
+            return
+        items.sort(key=lambda n: (_PRIORITY_ORDER.get(n.priority, 9), n.created_at))
+        shown = items[:_MAX_GOVERNOR_DISPLAY]
+        for n in shown:
+            try:
+                age = (_date.today() - _date.fromisoformat(n.created_at)).days
+            except ValueError:
+                age = 0
+            tag = n.priority.upper()
+            print(f"  [GOVERNOR] {tag} — {n.message} (id:{n.id}, age:{age}d)")
+            if n.status == "pending":
+                gov.seen(n.id)
+        extra = len(items) - len(shown)
+        if extra > 0:
+            print(f"  [GOVERNOR] {extra} more — run `python sdk/notification_manager.py list`")
+    except Exception:
+        pass  # governor display never blocks session start
+
+
 def run_session_start(arch_root: Path, force: bool = False) -> None:
     now = datetime.now(timezone.utc)
     now_str = now.strftime("%Y-%m-%dT%H:%MZ")
@@ -331,6 +363,9 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         print(f"  [PROPOSALS] {pending_proposals} pending — see governance/proposals/")
     else:
         print(f"  [PROPOSALS] 0 pending — none to review")
+
+    # Governor notifications (Phase 21)
+    _display_governor_notifications(arch_root)
 
     # Patterns summary
     patterns_path = arch_root / "governance" / "patterns.md"
