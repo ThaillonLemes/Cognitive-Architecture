@@ -26,7 +26,7 @@ tools:
     name: "Health report"
     command: "python sdk/health_report.py --arch-root ."
     description: "5-line project health snapshot: phase, blocks done, open issues, last block, last audit."
-    recommended_interval_days: 3
+    recommended_interval_days: 1
     trigger_type: time
     priority: high
     last_run: "2026-05-28T06:02Z"
@@ -56,7 +56,7 @@ tools:
     name: "Phase forecast"
     command: "python sdk/phase_forecast.py --arch-root ."
     description: "Estimates remaining time in current phase based on velocity and open blocks."
-    recommended_interval_days: 3
+    recommended_interval_days: 1
     trigger_type: time
     priority: medium
     last_run: "never"
