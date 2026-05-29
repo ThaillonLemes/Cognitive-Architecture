@@ -25,4 +25,5 @@
 
 
 
-status:complete next_action:none phase:phase-22 note:phases-18-22-all-complete_no-pending-work last_updated:2026-05-28
+
+status:active next_action:block-136 phase:phase-23 manifest:manifests/block-136-*.md group:23A note:phase-23-instrument-repair-active last_updated:2026-05-29
