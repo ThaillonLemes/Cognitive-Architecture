@@ -69,8 +69,8 @@ The whole value of cognitive-arch is "the system observes itself and tells you w
 
 | Block | Title | Tier | Status | Manifest |
 |-------|-------|------|--------|----------|
-| block-135 | CLI smoke-test harness | M | planned | `manifests/block-135-cli-smoke.md` |
-| block-136 | Fix crashers (UTF-8 + PermissionError) | M | planned | `manifests/block-136-fix-crashers.md` |
-| block-137 | project_state.py single source of truth | M | planned | `manifests/block-137-project-state.md` |
+| block-135 | CLI smoke-test harness | M | done | `manifests/block-135-cli-smoke.md` |
+| block-136 | Fix crashers (UTF-8 + PermissionError) | M | done | `manifests/block-136-fix-crashers.md` |
+| block-137 | project_state.py single source of truth | M | done | `manifests/block-137-project-state.md` |
 | block-138 | Velocity + BLOCK_LOG parse fix | M | planned | `manifests/block-138-velocity-fix.md` |
 | block-139 | Re-mine patterns + close loop | M | planned | `manifests/block-139-close-loop.md` |

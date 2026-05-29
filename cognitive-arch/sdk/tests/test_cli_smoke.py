@@ -1,7 +1,7 @@
 # PURPOSE: Smoke-test every sdk CLI as the user runs it (python sdk/foo.py) under cp1252.
 #          Catches crash-on-run bugs that unit tests miss (e.g. UnicodeEncodeError on stdout).
 # INPUTS:  sdk/*.py tools; a throwaway copy of cognitive-arch-generic as fixture
-# OUTPUTS: pass/fail per tool; xfail for known crashers until block-136 fixes them
+# OUTPUTS: pass/fail per tool; xfail for known crashers (velocity --help; block-138)
 # DEPS:    pytest, subprocess, shutil
 # SEE:     phases/phase-23.md block-135, sdk/recommendation_engine.py, sdk/velocity_inference.py
 
@@ -19,9 +19,11 @@ _GENERIC = _ARCH.parent / "cognitive-arch-generic"     # sibling scaffold (fixtu
 
 _SKIP = {"__init__.py", "conftest.py"}
 
-# Tools confirmed broken by the block-135 probe — fixed in block-136 via
-# sdk/safe_io.py (UTF-8 guard) + velocity import/indent fixes. Empty = all green.
-_KNOWN_CRASHERS: set[str] = set()
+# Tools still confirmed broken. block-136 fixed the UTF-8 crashers but missed
+# velocity_inference's --help path: it has no argparse, so `--help` is treated
+# as a block id and reading the empty manifest path opens "." -> PermissionError.
+# block-138 (velocity fix) owns the real fix; tracked as xfail until then.
+_KNOWN_CRASHERS: set[str] = {"velocity_inference.py"}
 
 
 def _tools() -> list[Path]:
@@ -46,7 +48,7 @@ def _params():
     out = []
     for p in _tools():
         marks = (
-            [pytest.mark.xfail(reason="crashes pre-block-136", strict=True)]
+            [pytest.mark.xfail(reason="velocity --help reads '.'; block-138 fixes", strict=True)]
             if p.name in _KNOWN_CRASHERS else []
         )
         out.append(pytest.param(p, marks=marks, id=p.name))

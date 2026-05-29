@@ -1,8 +1,8 @@
 # PURPOSE: Generate a composite project health report (audit, velocity, forecast, coverage, tracks)
 # INPUTS:  arch-root directory, BLOCK_LOG.md, phases/, design/, tracks/PRIORITY.md
 # OUTPUTS: governance/health-report-YYYY-MM-DD.md
-# DEPS:    stdlib only (pathlib, datetime, argparse, re, math, statistics)
-# SEE:     commands/health-report.md, commands/velocity.md, commands/phase-forecast.md
+# DEPS:    stdlib (pathlib, datetime, argparse, re, math, statistics) + project_state, safe_io
+# SEE:     commands/health-report.md, sdk/project_state.py (single source of truth)
 
 """
 Health Report Generator for cognitive-arch projects.
@@ -20,6 +20,13 @@ import sys
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from statistics import mean
+
+# Ensure sibling modules importable when run as script
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import project_state
+from safe_io import force_utf8
+force_utf8()
 
 
 # ---------------------------------------------------------------------------
@@ -101,14 +108,12 @@ def _section_audit(arch_root: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def _parse_block_log(arch_root: Path) -> list[str]:
-    """Return list of done block IDs from BLOCK_LOG.md."""
-    content = _read(arch_root, "blocks/BLOCK_LOG.md")
-    done_ids = []
-    for line in content.splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[1] == "done":
-            done_ids.append(parts[0])
-    return done_ids
+    """Return list of done block IDs — delegates to the single source of truth.
+
+    Kept as a thin wrapper so existing call sites (velocity, the report header)
+    all count blocks the same way project_state does (deduped, first-seen order).
+    """
+    return project_state.completed_block_ids(arch_root)
 
 
 def _parse_retro_frontmatter(content: str) -> dict:
@@ -227,12 +232,13 @@ def _section_phase_progress(arch_root: Path, velocity_means: dict) -> str:
     if not phases_dir.exists():
         return "No phases/ directory found."
 
-    # Find current phase — highest-numbered phase file
-    phase_files = sorted(phases_dir.glob("phase-[0-9]*.md"))
-    if not phase_files:
+    # Find current phase via project_state (canonical). The old logic,
+    # `sorted(glob("phase-[0-9]*.md"))[-1]`, sorted lexically (phase-9 landed
+    # after phase-22) and also matched phase-N-retro.md.
+    current_phase_file = project_state.current_phase_file(arch_root)
+    if current_phase_file is None:
         return "No phase files found in phases/."
 
-    current_phase_file = phase_files[-1]
     phase_name = current_phase_file.stem
     content = current_phase_file.read_text(encoding="utf-8") if current_phase_file.exists() else ""
 
