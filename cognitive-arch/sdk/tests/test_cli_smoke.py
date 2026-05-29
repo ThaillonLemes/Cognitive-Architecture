@@ -19,9 +19,9 @@ _GENERIC = _ARCH.parent / "cognitive-arch-generic"     # sibling scaffold (fixtu
 
 _SKIP = {"__init__.py", "conftest.py"}
 
-# Tools confirmed broken by the block-135 probe. block-136 fixes them and
-# removes them from this set (strict xfail flips to XPASS → red → reminder).
-_KNOWN_CRASHERS = {"recommendation_engine.py", "velocity_inference.py"}
+# Tools confirmed broken by the block-135 probe — fixed in block-136 via
+# sdk/safe_io.py (UTF-8 guard) + velocity import/indent fixes. Empty = all green.
+_KNOWN_CRASHERS: set[str] = set()
 
 
 def _tools() -> list[Path]:

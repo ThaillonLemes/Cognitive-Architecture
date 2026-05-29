@@ -189,6 +189,6 @@ if __name__ == "__main__":
     signals = extract_all(arch_root)
     patterns = analyze(signals)
     recs = recommend(patterns)
-    print(f"Patterns: {len(patterns)} → Recommendations: {len(recs)}")
+    print(f"Patterns: {len(patterns)} -> Recommendations: {len(recs)}")
     for r in recs:
         print(f"  [{r.priority.upper()}] {r.title}")
