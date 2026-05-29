@@ -2,11 +2,12 @@
 # PURPOSE: Render Pattern records to governance/patterns.md (markdown).
 # INPUTS:  list[Pattern] from pattern_analyzer.analyze(), arch root
 # OUTPUTS: governance/patterns.md (overwritten each run)
-# DEPS:    stdlib only (pathlib, datetime), sdk/pattern_schema
+# DEPS:    stdlib (argparse, pathlib, datetime), sdk/pattern_schema, sdk/safe_io
 # SEE:     sdk/pattern_analyzer.py, sdk/recommendation_engine.py, commands/pattern-mining.md
 
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -108,13 +109,30 @@ def write_report(patterns: list[Pattern], arch_root: Path) -> Path:
     return out
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="patterns_report",
+        description="Mine patterns and render them to governance/patterns.md.",
+    )
+    parser.add_argument(
+        "--arch-root",
+        metavar="PATH",
+        default=".",
+        help="Path to the cognitive-arch root directory (default: current directory).",
+    )
+    return parser
+
+
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
+    from safe_io import force_utf8
+    force_utf8()
     from retro_signals import extract_all
     from pattern_analyzer import analyze
 
-    arch_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
+    args = build_parser().parse_args()
+    arch_root = Path(args.arch_root)
     signals = extract_all(arch_root)
     patterns = analyze(signals)
     out = write_report(patterns, arch_root)
-    print(f"Written {len(patterns)} patterns to {out.relative_to(arch_root)}")
+    print(f"Written {len(patterns)} patterns to {out}")
