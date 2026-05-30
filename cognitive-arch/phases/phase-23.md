@@ -1,12 +1,12 @@
 ---
 id: phase-23
-status: active
+status: done
 prev_phase: phase-22
 exit_criteria_count: 5
 blocks_count: 5
 estimated_duration_minutes: 180
 created_at: 2026-05-29
-last_updated: 2026-05-29
+last_updated: 2026-05-30
 owner: implementer
 ---
 
@@ -72,5 +72,5 @@ The whole value of cognitive-arch is "the system observes itself and tells you w
 | block-135 | CLI smoke-test harness | M | done | `manifests/block-135-cli-smoke.md` |
 | block-136 | Fix crashers (UTF-8 + PermissionError) | M | done | `manifests/block-136-fix-crashers.md` |
 | block-137 | project_state.py single source of truth | M | done | `manifests/block-137-project-state.md` |
-| block-138 | Velocity + BLOCK_LOG parse fix | M | planned | `manifests/block-138-velocity-fix.md` |
-| block-139 | Re-mine patterns + close loop | M | planned | `manifests/block-139-close-loop.md` |
+| block-138 | Velocity + BLOCK_LOG parse fix | M | done | `manifests/block-138-velocity-fix.md` |
+| block-139 | Re-mine patterns + close loop | M | done | `manifests/block-139-close-loop.md` |

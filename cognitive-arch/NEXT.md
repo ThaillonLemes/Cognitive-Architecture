@@ -27,4 +27,20 @@
 
 
 
-status:active next_action:block-138 phase:phase-23 manifest:manifests/block-138-velocity-fix.md group:23A note:phase-23-instrument-repair-active last_updated:2026-05-29
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+status:active next_action:plan-phase-28 phase:phase-27 manifest:manifests/block-156-*.md group:26A note:phases-24-27-complete-roadmap-executed-awaiting-review last_updated:2026-05-30
