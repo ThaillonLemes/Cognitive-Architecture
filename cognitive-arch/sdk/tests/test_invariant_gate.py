@@ -57,9 +57,11 @@ def healthy_arch(tmp_path: Path) -> Path:
     """A small but fully-consistent arch root — no invariant fires."""
     root = tmp_path / "arch"
 
-    # INV1: one immutable file, present in the lock.
+    # INV1: one immutable file, present in the lock with the real hash.
+    import integrity_check as _ic
     _write(root / "PROTOCOLS.md", _immutable_doc("PROTOCOLS"))
-    _write(root / ".integrity.lock", "# lock\nPROTOCOLS.md  sha256:" + ("a" * 64) + "\n")
+    _real_hash = _ic.sha256_of_file(root / "PROTOCOLS.md")
+    _write(root / ".integrity.lock", "# lock\nPROTOCOLS.md  sha256:" + _real_hash + "\n")
 
     # INV2/INV3/INV5: two done blocks, both with tier+duration retros + manifests.
     _write(

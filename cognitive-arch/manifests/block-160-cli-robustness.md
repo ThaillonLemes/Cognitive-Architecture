@@ -3,10 +3,19 @@ id: block-160
 phase: phase-28
 title: Robustez CLI — encoding cp1252 & flag-as-path
 tier: M
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [HIGH-master-suggest-cp1252-crash, MEDIUM-weekly-report-stdout-cp1252, HIGH-pattern-analyzer-flag-as-path, MEDIUM-window-zero-returns-full]
+files:
+  modify:
+    - sdk/master_suggest.py
+    - sdk/weekly_report.py
+    - sdk/pattern_analyzer.py
+    - sdk/patterns_report.py
+    - sdk/tests/test_pattern_analyzer_window.py
+    - sdk/tests/test_cli_smoke.py
 ---
 
 # block-160 — Robustez CLI: encoding cp1252 & flag-as-path

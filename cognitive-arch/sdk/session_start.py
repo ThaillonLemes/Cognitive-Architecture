@@ -164,7 +164,7 @@ def run_weekly_report(arch_root: Path) -> tuple[bool, str]:
 
 
 def run_integrity_check(arch_root: Path) -> tuple[bool, str]:
-    return _run([sys.executable, "sdk/integrity_check.py", "--verify", "--arch-root", "."], arch_root, "integrity-check")
+    return _run([sys.executable, "sdk/integrity_check.py", "--verify", "--strict", "--arch-root", "."], arch_root, "integrity-check")
 
 
 def run_invariant_check(arch_root: Path) -> tuple[bool, str]:
@@ -327,6 +327,7 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
     ran = []
     skipped = []
     failed = []
+    unrunnable = []
 
     for tool in tools:
         tid = tool.get("id", "")
@@ -338,7 +339,7 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
             continue  # skip event-triggered (briefing, dependency-check)
 
         if tid not in TOOL_RUNNERS:
-            skipped.append(tid)
+            unrunnable.append(tid)
             continue
 
         stale = force or _is_stale(last_run, interval, now)
@@ -372,15 +373,13 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         else:
             failed.append("post-pause-briefing")
 
-    # Update health-report last_run (always runs at session start)
-    _update_last_run(registry_path, "health-report", now_str)
-    _update_last_run(registry_path, "dashboard-refresh", now_str)
-
     # Summary
     print()
     print("-" * 60)
     print(f"  Ran:     {', '.join(ran) if ran else 'none'}")
     print(f"  Skipped: {', '.join(skipped) if skipped else 'none'}")
+    if unrunnable:
+        print(f"  No runner (stale, needs implementation): {', '.join(unrunnable)}")
     if failed:
         print(f"  FAILED:  {', '.join(failed)}")
     print()
@@ -424,7 +423,11 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         m = re.search(r"Score: (\d+)/100", text)
         if m:
             score = int(m.group(1))
-            tag = "HEALTHY" if score >= 90 else "WARNING" if score >= 70 else "CRITICAL"
+            try:
+                import health_model as _hm
+                tag = _hm.label_for(score)
+            except Exception:
+                tag = "HEALTHY" if score >= 90 else "DEGRADED" if score >= 70 else "CRITICAL"
             print(f"  Health: {score}/100 [{tag}]")
 
     # Phase-completion forecast (Phase 26 / block-151) — dated estimate next to

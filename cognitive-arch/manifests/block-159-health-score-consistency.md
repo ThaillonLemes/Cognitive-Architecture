@@ -3,10 +3,19 @@ id: block-159
 phase: phase-28
 title: Consistência health/score entre ferramentas
 tier: M
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [MEDIUM-warning-vs-degraded-label, MEDIUM-audit-silent-legacy-fallback, MEDIUM-stagnation-count-crash, LOW-health-unknown-scrape-fail, DISPUTED-measured-estimated-label]
+files:
+  modify:
+    - sdk/health_model.py
+    - sdk/session_start.py
+    - sdk/health_report.py
+    - sdk/audit.py
+    - sdk/tests/test_health_model.py
+    - sdk/tests/test_health_consistency.py
 ---
 
 # block-159 — Consistência health/score entre ferramentas

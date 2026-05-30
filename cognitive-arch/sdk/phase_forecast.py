@@ -67,25 +67,38 @@ class Forecast:
 # Shared building blocks (used by forecast() AND health_report's section)
 # ---------------------------------------------------------------------------
 
-def phase_block_counts(arch_root: Path) -> tuple[int, int]:
+def phase_block_counts(arch_root_or_file: Path) -> tuple[int, int]:
     """(done_count, total_count) of blocks in the CURRENT phase's block table.
 
-    Counts the same way the original inline health_report logic did: `| done |`
-    status cells for done, `| block-NNN` rows for total (falling back to a
-    "N blocks" header phrase if the table has no rows). Reads the current phase
-    file via project_state (the single source of truth), so health_report and the
-    forecaster agree on "how many blocks are left". Defensive: any failure -> (0, 0).
+    Accepts either an arch-root directory (reads the current phase file via
+    project_state) or a direct phase file path (reads that file). Reads only
+    genuine block-index table rows (anchored to line start) so block IDs
+    mentioned in prose cells (e.g. Risks table) are not over-counted.
+    Defensive: any failure -> (0, 0).
     """
     try:
-        phase_file = project_state.current_phase_file(arch_root)
+        arch_root_or_file = Path(arch_root_or_file)
+        if arch_root_or_file.is_file():
+            # Called with a direct phase file path (e.g. from tests or CLI verify).
+            phase_file = arch_root_or_file
+        else:
+            phase_file = project_state.current_phase_file(arch_root_or_file)
         if phase_file is None or not phase_file.exists():
             return 0, 0
         content = phase_file.read_text(encoding="utf-8")
     except Exception:
         return 0, 0
 
-    done_count = len(re.findall(r"\|\s*done\s*\|", content, re.IGNORECASE))
-    total_count = max(done_count, len(re.findall(r"\|\s*block-\d+", content, re.IGNORECASE)))
+    # Count only genuine block-index rows (anchored to line start to avoid
+    # matching block IDs mentioned in prose cells like the Risks table).
+    block_rows = re.findall(r"(?m)^\s*\|\s*(block-\d+)\s*\|", content)
+    total_count = len(block_rows)
+    # Count done rows: lines matching block-row pattern that also contain '| done |'
+    done_count = sum(
+        1 for row_line in re.findall(r"(?m)^\s*\|[^\n]+\|", content)
+        if re.search(r"\bblock-\d+\b", row_line, re.IGNORECASE)
+        and re.search(r"\|\s*done\s*\|", row_line, re.IGNORECASE)
+    )
     if total_count == 0:
         m = re.search(r"(\d+)\s+blocks?", content, re.IGNORECASE)
         if m:

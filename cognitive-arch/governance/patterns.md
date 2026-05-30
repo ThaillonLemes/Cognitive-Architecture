@@ -2,7 +2,7 @@
 
 BRIEF: Auto-generated pattern report. Re-run: `python sdk/patterns_report.py --arch-root .`
 
-**Generated:** 2026-05-30T05:55Z  
+**Generated:** 2026-05-30T14:03Z  
 **Total patterns:** 3 (🔴 critical: 0 · 🟡 warn: 2 · 🔵 info: 1)
 
 ---
@@ -20,7 +20,7 @@ BRIEF: Auto-generated pattern report. Re-run: `python sdk/patterns_report.py --a
 ## 🟡 WARN — gate-failures-recurring
 
 **Rule:** R3  
-**Description:** 4 of last 123 blocks had at least one gate failure.  
+**Description:** 4 of last 127 blocks had at least one gate failure.  
 **First detected:** block-125  
 **Last detected:** block-132  
 **Occurrences:** 4
@@ -34,7 +34,7 @@ BRIEF: Auto-generated pattern report. Re-run: `python sdk/patterns_report.py --a
 ## 🟡 WARN — scope-expansion-recurring
 
 **Rule:** R4  
-**Description:** 9 of last 123 blocks had files added beyond manifest.  
+**Description:** 9 of last 127 blocks had files added beyond manifest.  
 **First detected:** block-052  
 **Last detected:** block-097  
 **Occurrences:** 9
@@ -48,7 +48,7 @@ BRIEF: Auto-generated pattern report. Re-run: `python sdk/patterns_report.py --a
 ## 🔵 INFO — velocity-data-gap
 
 **Rule:** R6  
-**Description:** 58 of last 123 blocks are missing actual_duration_hours.  
+**Description:** 58 of last 127 blocks are missing actual_duration_hours.  
 **First detected:** block-001  
 **Last detected:** block-060  
 **Occurrences:** 58

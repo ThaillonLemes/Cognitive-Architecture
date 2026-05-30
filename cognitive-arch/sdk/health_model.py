@@ -408,6 +408,20 @@ def _hot_boot_factor(arch_root: Path) -> Factor:
 # Public API
 # ---------------------------------------------------------------------------
 
+def label_for(score: int) -> str:
+    """Return the canonical severity label for a health score.
+
+    Single source of truth — all tools must call this instead of
+    re-implementing the bucket words (block-159 fix for WARNING vs DEGRADED divergence).
+    Vocabulary: HEALTHY / DEGRADED / CRITICAL
+    """
+    if score >= 90:
+        return "HEALTHY"
+    if score >= 70:
+        return "DEGRADED"
+    return "CRITICAL"
+
+
 def compute(arch_root: Path | str) -> HealthScore:
     """Build the canonical HealthScore for `arch_root` from real signals.
 

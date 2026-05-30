@@ -440,3 +440,70 @@ class TestDeterministicMirror:
         assert (arch / target_file).read_bytes() == before  # byte-identical restore
         decisions = arch / "decisions"
         assert not (decisions.exists() and list(decisions.glob("ADR-*-apply-*.md")))
+
+
+# ---------------------------------------------------------------------------
+# Helper for block-158 unit tests (no real verification subprocess needed)
+# ---------------------------------------------------------------------------
+
+def _setup_minimal_arch(tmp_path: Path) -> Path:
+    """Create the minimum directory structure ProposalApply needs for guard/mark tests.
+
+    Returns tmp_path (the arch root).  Does NOT create sdk/tests/ or audit.py
+    because these tests never reach _run_verification.
+    """
+    (tmp_path / "governance" / "proposals").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "PROTOCOLS.md").write_text(
+        "# PROTOCOLS\n\nMinimal stub. No immutable files declared.\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+# --- block-158 tests ---------------------------------------------------------
+
+def test_apply_refused_for_non_utf8_target(tmp_path):
+    """Apply must be refused (not corrupting) when target contains non-UTF-8 bytes."""
+    _setup_minimal_arch(tmp_path)
+    # Create a target with valid cp1252 bytes that are invalid UTF-8
+    target = tmp_path / "protocols" / "open.md"
+    target.parent.mkdir(exist_ok=True)
+    target.write_bytes(b"# caf\xe9\n\nsome content.\n")  # 0xE9 = cp1252 e-acute
+    # Create a minimal accepted proposal targeting it
+    (tmp_path / "governance" / "proposals").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "governance" / "proposals" / "p-cp1252.md").write_text(
+        "---\nid: p-cp1252\nstatus: accepted\ntarget_file: protocols/open.md\n---\n\n"
+        "## Proposed Change\n\nAdd a note.\n"
+    )
+    idx = tmp_path / "governance" / "proposals" / "index.md"
+    idx.write_text("| p-cp1252 | protocols/open.md | accepted |\n")
+    pa = ProposalApply(tmp_path)
+    result = pa.apply("p-cp1252", confirm=True)
+    assert result.applied is False
+    assert result.rolled_back is False  # not even attempted
+    assert any("UTF-8" in r or "utf-8" in r for r in result.reasons)
+    # Original file must be byte-identical (not corrupted)
+    assert target.read_bytes() == b"# caf\xe9\n\nsome content.\n"
+
+
+def test_mark_proposal_applied_only_first_status_line(tmp_path):
+    """_mark_proposal_applied must only rewrite the first **Status:** line."""
+    _setup_minimal_arch(tmp_path)
+    (tmp_path / "governance" / "proposals").mkdir(parents=True, exist_ok=True)
+    prop = tmp_path / "governance" / "proposals" / "p-test.md"
+    prop.write_text(
+        "---\nid: p-test\nstatus: accepted\ntarget_file: dummy.md\n---\n\n"
+        "**Status:** accepted\n\n"
+        "> Example: **Status:** pending (this must NOT change)\n"
+    )
+    (tmp_path / "governance" / "proposals" / "index.md").write_text(
+        "| p-test | dummy.md | accepted |\n"
+    )
+    pa = ProposalApply(tmp_path)
+    pa._mark_proposal_applied("p-test")
+    text = prop.read_text()
+    lines_with_status = [l for l in text.splitlines() if "**Status:**" in l]
+    # The resolution line should be applied
+    assert any("applied" in l for l in lines_with_status)
+    # The quoted example line must still say "pending"
+    assert any("pending" in l for l in lines_with_status)

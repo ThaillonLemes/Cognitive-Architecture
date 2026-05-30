@@ -291,6 +291,9 @@ def write_report(
 
 if __name__ == "__main__":
     import argparse, sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    from safe_io import force_utf8
+    force_utf8()
 
     parser = argparse.ArgumentParser(description="Weekly report generator")
     parser.add_argument("--arch-root", default=".", help="Root of cognitive-arch project")

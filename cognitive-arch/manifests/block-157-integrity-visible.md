@@ -3,10 +3,21 @@ id: block-157
 phase: phase-28
 title: Integridade visível por padrão em toda a cadeia
 tier: M
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [HIGH-mismatch-invisible, HIGH-session-start-no-strict, MEDIUM-audit-strict-warnings, HIGH-security-revalidation-unrunnable, MEDIUM-last-run-unconditional]
+files:
+  modify:
+    - sdk/integrity_check.py
+    - sdk/invariant_check.py
+    - sdk/session_start.py
+    - sdk/audit.py
+    - sdk/tests/test_integrity_check.py
+    - sdk/tests/test_invariant_check.py
+    - sdk/tests/test_invariant_gate.py
+    - .integrity.lock
 ---
 
 # block-157 — Integridade visível por padrão em toda a cadeia

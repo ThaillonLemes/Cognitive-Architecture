@@ -382,17 +382,16 @@ class ProposalApply:
         """True iff governor-log records an INTEGRITY BUMP APPROVED for target_file.
 
         Matches a `file:` line (with or without a leading comment '#') whose value
-        equals the target's relpath OR basename, but only inside an
+        equals the target's exact relpath, but only inside an
         `INTEGRITY BUMP APPROVED` block (bounded by an END marker when present).
-        An unrelated bump (different file) does NOT satisfy this.
+        An unrelated bump (different file, including one sharing only the basename)
+        does NOT satisfy this.
         """
         log_path = self.arch_root / "governance" / "governor-log.md"
         if not log_path.exists():
             return False
         text = log_path.read_text(encoding="utf-8", errors="replace")
         rel = target_file.replace("\\", "/").strip()
-        base = Path(rel).name
-
         in_block = False
         for raw in text.splitlines():
             line = raw.lstrip("#").strip()
@@ -402,12 +401,16 @@ class ProposalApply:
             if in_block and "END INTEGRITY BUMP" in line.upper():
                 in_block = False
                 continue
+            # Any other block-marker boundary resets the flag (prevents sticky leak)
+            if in_block and re.match(r"^---\s+\S.*\S\s+---$", line):
+                in_block = False
+                continue
             if not in_block:
                 continue
             m = re.match(r"file:\s*(.+)$", line, re.IGNORECASE)
             if m:
                 named = m.group(1).strip().strip("\"'").replace("\\", "/")
-                if named == rel or Path(named).name == base:
+                if named == rel:   # exact relpath only — no basename fallback
                     return True
         return False
 
@@ -422,6 +425,14 @@ class ProposalApply:
         lock = integrity_check.load_lock(self.arch_root)
         # Lock keys are POSIX relpaths.
         if rel not in lock:
+            # If the file is immutable but not locked, refuse as a fail-safe:
+            # an immutable file must be in the lock before it can be applied to.
+            if _is_immutable(rel, self.arch_root):
+                return False, (
+                    f"integrity guard: target '{rel}' is marked protection:immutable "
+                    f"but is not in .integrity.lock — run commands/integrity-bump.md "
+                    f"to register it before applying."
+                )
             return True, ""
         for path, status in integrity_check.verify(self.arch_root):
             if path.replace("\\", "/") == rel:
@@ -594,6 +605,26 @@ class ProposalApply:
         original_bytes = target_path.read_bytes()
 
         # --- 4. Atomic write of the post-change content --------------------
+        # Guard: refuse to apply if the target is not valid UTF-8 to avoid
+        # silent data corruption (errors='replace' would turn cp1252 bytes
+        # like 0xE9 into U+FFFD permanently on a successful apply).
+        try:
+            original_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            return ApplyResult(
+                applied=False,
+                proposal_id=proposal_id,
+                target_file=target_file,
+                backup_path="",
+                tests_passed=False,
+                rolled_back=False,
+                reasons=[
+                    f"apply refused: target '{target_file}' is not valid UTF-8. "
+                    f"The apply path reads and rewrites files as UTF-8; applying "
+                    f"to a non-UTF-8 file would silently corrupt it. "
+                    f"Convert the file to UTF-8 first."
+                ],
+            )
         proposal_path = self._find_proposal(proposal_id)
         proposal_text = (
             proposal_path.read_text(encoding="utf-8", errors="replace")
@@ -722,7 +753,7 @@ class ProposalApply:
             [sys.executable, "-m", "pytest", "sdk/tests/", "-q"],
             env,
             label="pytest",
-            fail_markers=("failed", "error"),
+            fail_markers=("failed",),   # rely on exit code; "error" caused false positives
             reasons=reasons,
         )
         audit_ok = self._run_one(
@@ -771,9 +802,9 @@ class ProposalApply:
         ok = proc.returncode == 0
         if ok and fail_markers:
             for marker in fail_markers:
-                # pytest prints "N failed" only when there are failures; a bare
-                # "0 failed" never appears in -q summaries, so a substring test is safe.
-                if marker in low:
+                # Use word-boundary match so "failed" only catches the pytest summary
+                # line (e.g. "1 failed") and not function names or error types.
+                if re.search(r'\b' + re.escape(marker) + r'\b', low):
                     ok = False
                     break
         if ok and require_marker is not None and require_marker not in out:
@@ -795,8 +826,9 @@ class ProposalApply:
         text = _update_frontmatter_field(text, "status", "applied")
         text = _update_frontmatter_field(text, "applied_at", today)
         text = _update_frontmatter_field(text, "applied_by", "proposal_apply")
-        # Flip the human-readable **Status:** line from whatever it was to applied.
-        text = re.sub(r"\*\*Status:\*\*[^\n]*", "**Status:** applied", text)
+        # Flip only the FIRST standalone **Status:** line (anchored, count=1 to avoid
+        # corrupting quoted/example occurrences in the proposal body).
+        text = re.sub(r"(?m)^\*\*Status:\*\*[^\n]*", "**Status:** applied", text, count=1)
         path.write_text(text, encoding="utf-8")
         _update_index_status(self.proposals_dir / "index.md", proposal_id, "applied")
 

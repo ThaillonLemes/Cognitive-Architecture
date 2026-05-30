@@ -240,3 +240,28 @@ def test_warn_category_cap_prevents_zeroing(monkeypatch, tmp_path):
     assert warn.cost == health_model.WARN_CATEGORY_CAP
     # One light category alone cannot exceed the cap (so it can't solo-zero a root).
     assert warn.cost <= 100
+
+
+def test_audit_score_fallback_is_visible(tmp_path, monkeypatch):
+    """When health_model.compute fails, audit.score() must emit a visible warning."""
+    import sys
+    sys.path.insert(0, str(Path("cognitive-arch/sdk").resolve()))
+
+    # Force health_model.compute to raise so the fallback path is exercised.
+    def _boom(root):
+        raise RuntimeError("simulated compute failure for fallback test")
+
+    monkeypatch.setattr(health_model, "compute", _boom)
+
+    from audit import AuditResult
+    r = AuditResult(arch_root=tmp_path)
+    # score() should not raise and should add a warning
+    import io, contextlib
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink):
+        score = r.score()
+    assert isinstance(score, int)
+    # A warning should have been added (the fallback must be visible)
+    assert any("health_model" in w.lower() or "legacy" in w.lower() for w in r.warnings), (
+        f"Expected a visible fallback warning, got warnings: {r.warnings}"
+    )

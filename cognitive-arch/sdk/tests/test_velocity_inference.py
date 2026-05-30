@@ -123,3 +123,27 @@ def test_infer_duration_real_block_returns_value():
     hours, source = velocity_inference.infer_duration("block-137", _ARCH_ROOT)
     assert source in ("auto-inferred", "estimated")
     assert hours > 0
+
+
+def test_locate_manifest_returns_none_on_multiple_matches(tmp_path: Path):
+    """_locate_manifest must return None when multiple files match the block ID."""
+    (tmp_path / "manifests").mkdir()
+    (tmp_path / "manifests" / "block-086-a.md").write_text("# a")
+    (tmp_path / "manifests" / "block-086-b.md").write_text("# b")
+    import sys
+    sys.path.insert(0, str(Path(_SDK_DIR).resolve()))
+    from velocity_inference import _locate_manifest
+    result = _locate_manifest("block-086", tmp_path)
+    assert result is None, f"Expected None for ambiguous match, got {result}"
+
+
+def test_locate_manifest_returns_single_match(tmp_path: Path):
+    """_locate_manifest must return the file when exactly one match exists."""
+    (tmp_path / "manifests").mkdir()
+    f = tmp_path / "manifests" / "block-086-velocity-fix.md"
+    f.write_text("# block")
+    import sys
+    sys.path.insert(0, str(Path(_SDK_DIR).resolve()))
+    from velocity_inference import _locate_manifest
+    result = _locate_manifest("block-086", tmp_path)
+    assert result == f

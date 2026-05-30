@@ -62,12 +62,11 @@ def _section_audit(arch_root: Path) -> str:
         )
 
     score = health.score
-    if score >= 90:
-        status = "HEALTHY"
-    elif score >= 70:
-        status = "DEGRADED"
-    else:
-        status = "CRITICAL"
+    try:
+        import health_model as _hm
+        status = _hm.label_for(score)
+    except Exception:
+        status = "HEALTHY" if score >= 90 else "DEGRADED" if score >= 70 else "CRITICAL"
 
     drags = health.top_drags(3)
     lines = [
@@ -176,7 +175,42 @@ def _velocity_confidence(count: int) -> str:
 
 def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
     """Build velocity section. Returns (markdown, velocity_means dict)."""
-    by_tier = _collect_velocity_data(arch_root, done_ids)
+    # Collect per-tier data AND a chronological list (BLOCK_LOG order) in one pass.
+    by_tier: dict[str, list[float]] = {"S": [], "M": [], "L": []}
+    # Build durations in BLOCK_LOG order (chronological) for trend computation,
+    # rather than grouping by tier (which puts all S then M then L, not time-ordered).
+    all_durations_chron: list[float] = []
+
+    blocks_dir = arch_root / "blocks"
+    if blocks_dir.exists():
+        for block_id in done_ids:
+            candidates = list(blocks_dir.glob(f"{block_id}-*.md"))
+            if not candidates:
+                candidates = list(blocks_dir.glob(f"{block_id}.md"))
+            if not candidates:
+                continue
+            retro_file = candidates[0]
+            try:
+                content = retro_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            fm = _parse_retro_frontmatter(content)
+            try:
+                duration = float(fm.get("actual_duration_hours", "0"))
+            except (ValueError, TypeError):
+                continue
+            if duration <= 0:
+                continue
+            tier = fm.get("tier", "").upper()
+            if tier not in by_tier:
+                manifest_path = velocity_inference._locate_manifest(block_id, arch_root)
+                if manifest_path is None:
+                    continue
+                tier = velocity_inference._tier_from_manifest(manifest_path)
+                if tier not in by_tier:
+                    continue
+            by_tier[tier].append(duration)
+            all_durations_chron.append(duration)
 
     rows = []
     velocity_means = {}
@@ -202,12 +236,11 @@ def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
             f"| {tier}    | {count:5} | {m:8} | {mn:7} | {mx:7} | {conf_label} | {source} |"
         )
 
-    # Trend: compare last 5 vs previous 5 blocks with duration data
-    all_durations = [d for tier in by_tier.values() for d in tier]
+    # Trend: compare last 5 vs previous 5 blocks in chronological (BLOCK_LOG) order.
     trend = "INSUFFICIENT DATA"
-    if len(all_durations) >= 10:
-        prev5 = mean(all_durations[-10:-5])
-        last5 = mean(all_durations[-5:])
+    if len(all_durations_chron) >= 10:
+        prev5 = mean(all_durations_chron[-10:-5])
+        last5 = mean(all_durations_chron[-5:])
         if last5 < prev5 * 0.9:
             trend = "IMPROVING (blocks completing faster)"
         elif last5 > prev5 * 1.1:
@@ -319,6 +352,14 @@ def _section_design_coverage(arch_root: Path) -> str:
 # Section 5 — Track Health
 # ---------------------------------------------------------------------------
 
+def _safe_int(value, default=0):
+    """Parse value as int, returning default on any error."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _section_track_health(arch_root: Path) -> str:
     priority_path = arch_root / "tracks" / "PRIORITY.md"
     if not priority_path.exists():
@@ -362,7 +403,7 @@ def _section_track_health(arch_root: Path) -> str:
         priority = row.get("total_priority", "?")
         last_imp = row.get("last_improved_at", "—")
         # Check stagnation
-        stagnation = int(row.get("stagnation_count", "0") or "0")
+        stagnation = _safe_int(row.get("stagnation_count", "0"))
         if stagnation >= 9:
             status = "⚠️ STAGNANT — escalate"
         elif stagnation >= 3:
@@ -386,7 +427,10 @@ def generate_report(arch_root: Path) -> str:
     velocity_section, velocity_means = _section_velocity(arch_root, done_ids)
     progress_section = _section_phase_progress(arch_root, velocity_means)
     coverage_section = _section_design_coverage(arch_root)
-    tracks_section = _section_track_health(arch_root)
+    try:
+        tracks_section = _section_track_health(arch_root)
+    except Exception as exc:
+        tracks_section = f"Error generating track health: {exc}"
 
     report = f"""# Project Health Report — {today}
 

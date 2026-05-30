@@ -3,10 +3,16 @@ id: block-158
 phase: phase-28
 title: Corrupção de dados no apply & gate de verificação
 tier: M
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [C1-utf8-lossy-corrupt, LOW-re-sub-status-unanchored, LOW-run-verification-error-marker, LOW-test-hot-boot-red]
+files:
+  modify:
+    - sdk/proposal_apply.py
+    - sdk/tests/test_apply_e2e.py
+    - INDEX.md
 ---
 
 # block-158 — Corrupção de dados no apply & gate de verificação

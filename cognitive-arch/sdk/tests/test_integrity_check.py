@@ -144,3 +144,23 @@ class TestLockAndVerify:
         root = tmp_path / "arch"
         _write(root / ".integrity.lock", "gone.md  sha256:" + ("c" * 64) + "\n")
         assert ic.verify(root) == [("gone.md", "MISSING")]
+
+
+def test_mismatch_exits_nonzero_without_strict(tmp_path):
+    """MISMATCH must exit 1 even without --strict after the fix."""
+    import subprocess, sys, hashlib
+    # Setup: create a lock entry then modify the file
+    lock = tmp_path / ".integrity.lock"
+    f = tmp_path / "PROTOCOLS.md"
+    f.write_text("---\nprotection: immutable\n---\noriginal\n")
+    h = hashlib.sha256(f.read_bytes()).hexdigest()
+    lock.write_text(f"PROTOCOLS.md  sha256:{h}\n")
+    # Now modify the file (tamper)
+    f.write_text("---\nprotection: immutable\n---\nTAMPERED\n")
+    result = subprocess.run(
+        [sys.executable, "sdk/integrity_check.py", "--verify", "--arch-root", str(tmp_path)],
+        capture_output=True, text=True,
+        cwd=r"C:\Users\thail\Arquitetura Cognitiva\cognitive-arch"
+    )
+    assert result.returncode == 1, f"Expected exit 1 on MISMATCH, got {result.returncode}"
+    assert "ERROR:" in result.stdout, f"Expected ERROR: in output, got: {result.stdout}"

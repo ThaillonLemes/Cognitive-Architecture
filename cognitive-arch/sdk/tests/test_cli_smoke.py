@@ -70,12 +70,14 @@ def test_help_no_crash(tool: Path):
 # ---------------------------------------------------------------------------
 
 _REAL_RUNS = [
-    ("health_report.py", ["--arch-root", "{fix}"]),
-    ("dashboard_generator.py", ["--arch-root", "{fix}"]),
-    ("patterns_report.py", ["--arch-root", "{fix}"]),
-    ("weekly_report.py", ["--arch-root", "{fix}"]),
-    ("integrity_check.py", ["--verify", "--arch-root", "{fix}"]),
-    ("audit.py", ["--arch-root", "{fix}"]),
+    pytest.param("health_report.py", ["--arch-root", "{fix}"], id="health_report.py"),
+    pytest.param("dashboard_generator.py", ["--arch-root", "{fix}"], id="dashboard_generator.py"),
+    pytest.param("patterns_report.py", ["--arch-root", "{fix}"], id="patterns_report.py"),
+    pytest.param("weekly_report.py", ["--arch-root", "{fix}"], id="weekly_report.py"),
+    pytest.param("weekly_report.py", ["--arch-root", "{fix}", "--stdout"], id="weekly_report.py--stdout"),
+    pytest.param("integrity_check.py", ["--verify", "--arch-root", "{fix}"], id="integrity_check.py"),
+    pytest.param("audit.py", ["--arch-root", "{fix}"], id="audit.py"),
+    pytest.param("master_suggest.py", ["--arch-root", "{fix}", "--demand"], id="master_suggest.py--demand"),
 ]
 
 
@@ -90,7 +92,7 @@ def fixture_arch(tmp_path_factory) -> Path:
     return target
 
 
-@pytest.mark.parametrize("name,args", _REAL_RUNS, ids=[n for n, _ in _REAL_RUNS])
+@pytest.mark.parametrize("name,args", _REAL_RUNS)
 def test_real_run_no_crash(name: str, args: list[str], fixture_arch: Path):
     tool = _SDK / name
     if not tool.exists():

@@ -271,3 +271,37 @@ def test_cli_prints_score_and_top_drags():
     import re
     m = re.search(r"Health:\s*(\d+)/100", r.stdout)
     assert m and 0 <= int(m.group(1)) <= 100
+
+
+def test_label_for_unified_vocabulary():
+    """label_for must return consistent labels — no WARNING/DEGRADED divergence."""
+    from health_model import label_for
+    assert label_for(95) == "HEALTHY"
+    assert label_for(90) == "HEALTHY"
+    assert label_for(89) == "DEGRADED"
+    assert label_for(80) == "DEGRADED"
+    assert label_for(70) == "DEGRADED"
+    assert label_for(69) == "CRITICAL"
+    assert label_for(0) == "CRITICAL"
+
+
+def test_session_start_uses_degraded_not_warning(tmp_path):
+    """session_start must print DEGRADED (not WARNING) for a score in [70,90)."""
+    # Create a minimal health report in tmp_path/governance/
+    (tmp_path / "governance").mkdir()
+    (tmp_path / "governance" / "health-report-2099-01-01.md").write_text(
+        "# Health\n\nScore: 80/100 — DEGRADED\n"
+    )
+    (tmp_path / "governance" / "patterns.md").write_text("")
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, "cognitive-arch/sdk/session_start.py", "--arch-root", str(tmp_path)],
+        capture_output=True, text=True,
+        cwd="C:\\Users\\thail\\Arquitetura Cognitiva"
+    )
+    combined = result.stdout + result.stderr
+    # Must not say WARNING for score 80
+    assert "WARNING" not in combined or "DEGRADED" in combined, (
+        f"Expected DEGRADED label for score 80, got: {combined}"
+    )
+    assert "DEGRADED" in combined or "80/100" not in combined

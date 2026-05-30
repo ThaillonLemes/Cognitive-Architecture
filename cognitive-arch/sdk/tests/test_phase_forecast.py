@@ -250,3 +250,33 @@ def test_cli_empty_arch_exits_zero(tmp_path: Path):
     r = _run_cli(["--arch-root", str(tmp_path)], cwd=tmp_path)
     assert r.returncode == 0
     assert "Traceback" not in (r.stdout + r.stderr)
+
+
+def test_phase_block_counts_no_overcount_from_prose(tmp_path: Path):
+    """phase_block_counts must not count block IDs mentioned in Risks table prose."""
+    phase_content = """---
+id: phase-99
+---
+## 5. Risks
+| Risk | Impact | Note |
+|------|--------|------|
+| Med | High | block-999 creates some file here |
+
+## 8. Block Index
+| Block | Status |
+|-------|--------|
+| block-998 | done |
+| block-997 | done |
+| block-996 | done |
+| block-995 | done |
+"""
+    phase_file = tmp_path / "phases" / "phase-99.md"
+    phase_file.parent.mkdir(parents=True, exist_ok=True)
+    phase_file.write_text(phase_content)
+    # Import from the actual SDK
+    import sys
+    sys.path.insert(0, str(Path("cognitive-arch/sdk").resolve()))
+    import phase_forecast
+    done, total = phase_forecast.phase_block_counts(phase_file)
+    assert total == 4, f"Expected 4 block rows, got {total} (prose block-999 was over-counted)"
+    assert done == 4, f"Expected 4 done, got {done}"

@@ -43,4 +43,4 @@
 
 
 
-p:28 status:active phase:phase-28 status_detail:phase-28-planned-bug-hunt-6-blocks created_at:2026-05-20 last_updated:2026-05-30 last_phase:phase-27 last_phase_status:complete last_block:block-155 last_block_status:done next:block-156 governor_mode:manual notes:phase-28-bug-hunt-26-confirmed-2-disputed-awaiting-pilot-approval blocks_done_count:155 blocks_done_source:blocks/BLOCK_LOG.md
+p:28 status:active phase:phase-28 status_detail:phase-28-complete-all-6-blocks-done created_at:2026-05-20 last_updated:2026-05-30 last_phase:phase-28 last_phase_status:complete last_block:block-161 last_block_status:done next:plan-phase-29 governor_mode:manual notes:phase-28-26-bugs-fixed-1060-tests-0-failed-audit-92-0-errors awaiting-pilot-norte-decision blocks_done_count:161 blocks_done_source:blocks/BLOCK_LOG.md

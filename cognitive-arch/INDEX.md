@@ -1,16 +1,13 @@
 # INDEX — navigation map
 
-BRIEF: Folder-level navigation map — read at session start to decide where to look.
-Per-file briefs (every `sdk/`, `protocols/`, `commands/`, phase doc) live in the cold
-`CATALOG.md` — go there for specific-file detail. For large files, use partial-read
-(`Read(file, limit:30)`) — see `protocols/file-reading-protocol.md`.
+BRIEF: Folder-level map. Per-file briefs in `CATALOG.md` (cold). Partial-read large files: `Read(file, limit:30)` — see `protocols/file-reading-protocol.md`.
 
 ## HOT (every session start)
 
 | File | Brief |
 |------|-------|
 | CLAUDE.md | AI entry point; reading order; flow pointers |
-| PROTOCOLS.md | 24 axioms (P/Q/C/S) + Charter; S1-S5 security axioms added Phase 10 |
+| PROTOCOLS.md | 24 axioms (P/Q/C/S) + Charter; S1-S5 security axioms |
 | STATE.md | Current project state — AI-only, dense |
 | NEXT.md | Pointer to next work — AI-only, dense |
 | INDEX.md | This navigation map |
@@ -49,5 +46,3 @@ Per-file briefs (every `sdk/`, `protocols/`, `commands/`, phase doc) live in the
 ---
 
 **Full per-file catalog** (every sdk/protocol/command/phase file + briefs) → `CATALOG.md`
-
-End of INDEX.md.

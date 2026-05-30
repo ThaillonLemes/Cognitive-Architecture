@@ -20,9 +20,14 @@ WINDOW_SIZE = 30
 
 
 def _window(signals: list[RetroSignal], size: int | None = WINDOW_SIZE) -> list[RetroSignal]:
-    """Return the most recent `size` signals; `size=None` disables windowing."""
+    """Return the last `size` signals, or all if size is None.
+
+    Returns [] for size <= 0 (not the full history).
+    """
     if size is None:
         return signals
+    if size <= 0:
+        return []
     return signals[-size:] if len(signals) > size else signals
 
 
@@ -227,11 +232,19 @@ def analyze(
 
 
 if __name__ == "__main__":
+    import argparse
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
     from retro_signals import extract_all
 
-    arch_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent
+    parser = argparse.ArgumentParser(description="Pattern analyzer for cognitive-arch")
+    parser.add_argument("--arch-root", default=".", help="Root of the cognitive-arch directory")
+    args = parser.parse_args()
+    arch_root = Path(args.arch_root).resolve()
+    if not arch_root.is_dir():
+        print(f"ERROR: arch-root '{arch_root}' is not a directory.", file=sys.stderr)
+        sys.exit(1)
+
     signals = extract_all(arch_root)
     patterns = analyze(signals)
     print(f"Signals: {len(signals)} | Patterns detected: {len(patterns)}")

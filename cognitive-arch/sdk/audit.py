@@ -81,8 +81,12 @@ class AuditResult:
             try:
                 import health_model  # lazy: health_model imports audit at module load
                 return health_model.compute(self.arch_root).score
-            except Exception:
-                pass  # fall through to the legacy estimate below
+            except ImportError:
+                # health_model not importable — fall through to legacy estimate
+                self.warn("health_model not importable; using legacy score estimate")
+            except Exception as exc:
+                # health_model.compute failed — surface it, fall through
+                self.warn(f"health_model.compute failed ({exc!r}); using legacy score estimate")
         return max(0, 100 - len(self.errors) * 15 - len(self.warnings) * 2)
 
     def to_dict(self) -> dict:
@@ -146,6 +150,16 @@ def check2_size_budgets(root: Path, r: AuditResult) -> None:
 
 _MD_LINK_RE = re.compile(r"\]\(([^)]+)\)")
 
+
+def _strip_code_spans(text: str) -> str:
+    """Remove fenced code blocks and inline code from markdown before link scanning."""
+    # Remove fenced code blocks (``` ... ```)
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    # Remove inline code spans (` ... `)
+    text = re.sub(r"`[^`\n]+`", "", text)
+    return text
+
+
 def check3_pointer_integrity(root: Path, r: AuditResult) -> None:
     print("[3/10] Pointer integrity...")
     broken = 0
@@ -157,12 +171,16 @@ def check3_pointer_integrity(root: Path, r: AuditResult) -> None:
             text = md_file.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
-        for m in _MD_LINK_RE.finditer(text):
+        text_for_scan = _strip_code_spans(text)  # exclude code from link checks
+        for m in _MD_LINK_RE.finditer(text_for_scan):
             target = m.group(1).split("#")[0].split("?")[0].strip()
             if not target or target.startswith("http"):
                 continue
-            resolved = (md_file.parent / target).resolve()
-            if not resolved.exists():
+            # Try file-relative resolution first, then arch-root-relative
+            # (authors often write root-relative links like 'governance/proposals/...').
+            resolved_parent = (md_file.parent / target).resolve()
+            resolved_root = (root / target).resolve()
+            if not resolved_parent.exists() and not resolved_root.exists():
                 r.warn(f"broken pointer in {md_file.relative_to(root)}: {target}")
                 broken += 1
     if broken == 0:
@@ -423,7 +441,8 @@ def run_audit(root: Path, strict: bool = False, as_json: bool = False) -> AuditR
         print(f"  Warnings: {len(r.warnings)}")
         # Score is the canonical health_model number (block-149), NOT a local formula.
         print(f"  Score:    {r.score()}/100")
-        print(f"  Result:   {'PASS' if r.passed else 'FAIL'}")
+        _strict_fail = strict and len(r.warnings) > 0
+        print(f"  Result:   {'PASS' if (r.passed and not _strict_fail) else 'FAIL'}")
         print("=" * 50)
 
     return r
@@ -442,4 +461,5 @@ if __name__ == "__main__":
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))
 
-    sys.exit(0 if result.passed else 1)
+    failed = (not result.passed) or (args.strict and len(result.warnings) > 0)
+    sys.exit(1 if failed else 0)

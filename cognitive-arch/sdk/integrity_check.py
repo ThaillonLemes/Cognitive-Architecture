@@ -161,13 +161,12 @@ if __name__ == "__main__":
     has_mismatch = any(s != "OK" for _, s in results)
 
     for path, status in results:
-        prefix = "OK:   " if status == "OK" else ("WARN: " if not args.strict else "ERROR:")
+        prefix = "OK:   " if status == "OK" else "ERROR:"
         print(f"{prefix} {path}: {status}")
 
     if has_mismatch:
         print("\nRun `python sdk/integrity_check.py --regenerate` ONLY after human review.")
         print("See: commands/integrity-bump.md")
-        if args.strict:
-            sys.exit(1)
+        sys.exit(1)
     else:
         print(f"All {len(results)} immutable files verified OK.")

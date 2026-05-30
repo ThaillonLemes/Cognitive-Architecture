@@ -125,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Override the analyzer window (default: 30 blocks). Ignored if --full is set.",
+        help="Override the analyzer window (default: 30 blocks). 0 = empty window (not full history). Ignored if --full is set.",
     )
     parser.add_argument(
         "--full",
@@ -182,6 +182,9 @@ if __name__ == "__main__":
 
     args = build_parser().parse_args()
     arch_root = Path(args.arch_root)
+    if args.window is not None and args.window < 0:
+        print("WARNING: --window must be >= 0; using 0 (empty window)", file=sys.stderr)
+        args.window = 0
     window_size = None if args.full else args.window
     summary = run_pipeline(arch_root, window_size=window_size, propose=not args.no_propose)
     print(

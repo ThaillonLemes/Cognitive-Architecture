@@ -3,10 +3,20 @@ id: block-161
 phase: phase-28
 title: Forecasts, relatórios & ruído de audit
 tier: M
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [HIGH-phase-block-counts-overcount, LOW-velocity-trend-tier-grouped, LOW-locate-manifest-multi-match, LOW-h4-600-byte-cap, MEDIUM-pointer-false-positives-doc, MEDIUM-pointer-root-relative-base]
+files:
+  modify:
+    - sdk/phase_forecast.py
+    - sdk/health_report.py
+    - sdk/velocity_inference.py
+    - sdk/risk_forecast.py
+    - sdk/audit.py
+    - sdk/tests/test_phase_forecast.py
+    - sdk/tests/test_velocity_inference.py
 ---
 
 # block-161 — Forecasts, relatórios & ruído de audit

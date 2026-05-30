@@ -110,3 +110,17 @@ class TestAnalyzeWindowSize:
         signals = [_sig(f"block-{i:03}", forced_pass=True) for i in range(THRESHOLD)]
         patterns = analyze(signals, window_size=1)
         assert not any(p.rule_id == "R5" for p in patterns)
+
+
+def test_window_zero_returns_empty():
+    """_window(signals, 0) must return [] not the full history."""
+    from pattern_analyzer import _window
+    result = _window(list(range(50)), 0)
+    assert result == [], f"Expected [], got list of length {len(result)}"
+
+
+def test_window_negative_returns_empty():
+    """_window(signals, -1) must return [] not the full history."""
+    from pattern_analyzer import _window
+    result = _window(list(range(50)), -1)
+    assert result == [], f"Expected [], got list of length {len(result)}"

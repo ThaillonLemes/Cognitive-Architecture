@@ -443,3 +443,93 @@ class TestCLI:
         assert "ALLOWED" in out
         # Evaluate-only: no _backups/ written even on ALLOWED.
         assert not (tmp_path / "_backups").exists()
+
+
+# ---------------------------------------------------------------------------
+# _setup_arch helper for block-156 tests
+# ---------------------------------------------------------------------------
+
+def _setup_arch(root):
+    """Create the minimal arch structure needed for ProposalApply instantiation."""
+    _write_protocols(root)
+    lock_path = root / ".integrity.lock"
+    if not lock_path.exists():
+        lock_path.write_text("# .integrity.lock\n")
+
+
+# ---- block-156 tests --------------------------------------------------------
+
+def test_integrity_bump_no_basename_collision(tmp_path):
+    """A bump for templates/manifest-medium.md must NOT unlock archive/manifest-medium.md."""
+    _setup_arch(tmp_path)
+    # Two immutable files sharing a basename in different dirs
+    (tmp_path / "templates").mkdir(exist_ok=True)
+    (tmp_path / "archive").mkdir(exist_ok=True)
+    for d in ("templates", "archive"):
+        f = tmp_path / d / "manifest-medium.md"
+        f.write_text("---\nprotection: immutable\n---\nbody\n")
+    # Lock both
+    lock_path = tmp_path / ".integrity.lock"
+    import hashlib
+    for d in ("templates", "archive"):
+        p = tmp_path / d / "manifest-medium.md"
+        h = hashlib.sha256(p.read_bytes()).hexdigest()
+        with open(lock_path, "a") as fh:
+            fh.write(f"{d}/manifest-medium.md  sha256:{h}\n")
+    # Bump names ONLY templates/manifest-medium.md
+    log = tmp_path / "governance" / "governor-log.md"
+    log.parent.mkdir(exist_ok=True)
+    log.write_text(
+        "# --- INTEGRITY BUMP APPROVED ---\n"
+        "# file: templates/manifest-medium.md\n"
+        "# --- END INTEGRITY BUMP ---\n"
+    )
+    pa = ProposalApply(tmp_path)
+    # templates — must be True (exact match)
+    assert pa._has_integrity_bump("templates/manifest-medium.md") is True
+    # archive — must be False (basename collision must not authorize)
+    assert pa._has_integrity_bump("archive/manifest-medium.md") is False
+
+
+def test_integrity_bump_sticky_flag_reset_on_wrong_end_marker(tmp_path):
+    """A bump block closed with --- END APPLY --- must NOT leak to later file: lines."""
+    _setup_arch(tmp_path)
+    log = tmp_path / "governance" / "governor-log.md"
+    log.parent.mkdir(exist_ok=True)
+    log.write_text(
+        "# --- INTEGRITY BUMP APPROVED ---\n"
+        "# file: SOME_OTHER.md\n"
+        "# --- END APPLY ---\n"           # wrong end marker
+        "\n"
+        "# --- APPLY APPLIED ---\n"
+        "# file: docs/TOTALLY_UNRELATED.md\n"
+        "# --- END APPLY ---\n"
+    )
+    pa = ProposalApply(tmp_path)
+    assert pa._has_integrity_bump("docs/TOTALLY_UNRELATED.md") is False
+
+
+def test_integrity_ok_unlocked_immutable_refused(tmp_path):
+    """An immutable file not in .integrity.lock must be refused, not silently OK."""
+    _setup_arch(tmp_path)
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    guide = tmp_path / "docs" / "GUIDE.md"
+    guide.write_text("---\nprotection: immutable\n---\nbody\n")
+    # .integrity.lock is empty (file not registered)
+    (tmp_path / ".integrity.lock").write_text("")
+    pa = ProposalApply(tmp_path)
+    ok, reason = pa._integrity_ok("docs/GUIDE.md")
+    assert ok is False
+    assert "not in .integrity.lock" in reason or "integrity-bump" in reason
+
+
+def test_integrity_ok_unlocked_non_immutable_passes(tmp_path):
+    """A non-immutable file not in the lock must still return OK."""
+    _setup_arch(tmp_path)
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "README.md").write_text("# README\n")
+    (tmp_path / ".integrity.lock").write_text("")
+    pa = ProposalApply(tmp_path)
+    ok, reason = pa._integrity_ok("docs/README.md")
+    assert ok is True
+

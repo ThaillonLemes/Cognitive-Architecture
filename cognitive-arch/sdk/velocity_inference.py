@@ -88,12 +88,16 @@ def _tier_from_manifest(manifest_path: Path) -> str:
 
 
 def _locate_manifest(block_id: str, arch_root: Path) -> Optional[Path]:
-    """Return manifests/<block_id>-*.md if exactly one exists, else None."""
+    """Return manifests/<block_id>-*.md if exactly one exists, else None.
+
+    Returns None when zero or multiple matches exist (multiple matches are
+    ambiguous; the caller should not silently pick one at random).
+    """
     manifests_dir = arch_root / "manifests"
-    if not manifests_dir.exists():
+    if not manifests_dir.is_dir():
         return None
-    candidates = list(manifests_dir.glob(f"{block_id}-*.md"))
-    return candidates[0] if candidates else None
+    candidates = sorted(manifests_dir.glob(f"{block_id}-*.md"))
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def infer_duration(

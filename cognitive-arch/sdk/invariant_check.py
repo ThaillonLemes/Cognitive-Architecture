@@ -105,8 +105,17 @@ def _manifest_tier(arch_root: Path, block_id: str) -> str | None:
 def check_inv1(arch_root: Path) -> list[str]:
     immutable = integrity_check.find_immutable_files(arch_root)
     lock = integrity_check.load_lock(arch_root)
-    missing = [rel for rel in immutable if rel not in lock]
-    return [f"immutable file not in .integrity.lock: {rel}" for rel in missing]
+    violations = []
+    # Check 1: immutable files not present in lock at all
+    for rel in immutable:
+        if rel not in lock:
+            violations.append(f"immutable file not in .integrity.lock: {rel}")
+    # Check 2: immutable files in lock but with hash mismatch
+    for path, status in integrity_check.verify(arch_root):
+        rel = path.replace("\\", "/")
+        if rel in immutable and status != "OK":
+            violations.append(f"immutable file hash {status} in .integrity.lock: {rel}")
+    return violations
 
 
 # ---------------------------------------------------------------------------

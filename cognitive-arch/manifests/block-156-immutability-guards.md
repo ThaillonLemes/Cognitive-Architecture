@@ -3,10 +3,15 @@ id: block-156
 phase: phase-28
 title: Guards de imutabilidade & autorização de bump
 tier: L
-status: planned
+kind: fix
+status: done
 created_at: 2026-05-30
 source: bug-hunt-2026-05-30
 bugs_fixed: [C2-basename-collision, LOW-end-marker-sticky, DISPUTED-integrity-ok-unlocked]
+files:
+  modify:
+    - sdk/proposal_apply.py
+    - sdk/tests/test_apply_guards.py
 ---
 
 # block-156 — Guards de imutabilidade & autorização de bump

@@ -20,6 +20,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from safe_io import force_utf8
 import velocity_inference as vi
+import integrity_check as _ic
 
 # Tier file-count ceilings. M==8 is documented in templates/manifest-medium.md
 # ("total modify + create <= 8 paths"); S/L bracket it.
@@ -215,8 +216,11 @@ def _h4_immutable_touch(files: list[str], arch_root: Path) -> RiskFlag:
             p = arch_root / rel
             if not vi._is_real_file(p):
                 continue
-            head = p.read_text(encoding="utf-8", errors="ignore")[:600]
-            if re.search(r"^\s*protection:\s*immutable", head, re.MULTILINE):
+            # Use the canonical immutability check (integrity_check.is_immutable_text)
+            # so H4 and the integrity lock share one definition of 'immutable'
+            # (rather than a 600-byte cap that misses deep frontmatter).
+            text_full = p.read_text(encoding="utf-8", errors="ignore")
+            if _ic.is_immutable_text(text_full):
                 hits.append(rel)
         except Exception:
             continue

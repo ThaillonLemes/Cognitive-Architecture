@@ -50,11 +50,14 @@ def healthy_arch(tmp_path: Path) -> Path:
     a complete lock, consistent STATE/NEXT, one proposal indexed both ways."""
     root = tmp_path / "arch"
 
-    # Immutable file + matching lock entry (INV1 clean).
+    # Immutable file + matching lock entry (INV1 clean) — use the real hash so
+    # check_inv1's verify() pass also sees OK (not a fake that would MISMATCH).
+    import integrity_check as _ic
     _write(root / "PROTOCOLS.md", _immutable_doc("PROTOCOLS"))
+    _real_hash = _ic.sha256_of_file(root / "PROTOCOLS.md")
     _write(
         root / ".integrity.lock",
-        "# lock\nPROTOCOLS.md  sha256:" + ("a" * 64) + "\n",
+        "# lock\nPROTOCOLS.md  sha256:" + _real_hash + "\n",
     )
 
     # BLOCK_LOG with two done blocks (INV2/INV5 input).
@@ -123,6 +126,31 @@ class TestINV1:
     def test_clean_when_lock_complete(self, tmp_path):
         root = healthy_arch(tmp_path)
         assert ic.check_inv1(root) == []
+
+    def test_fires_when_immutable_file_has_hash_mismatch(self, tmp_path):
+        """INV1 must report a violation when an immutable file is in the lock but tampered."""
+        import integrity_check as _ic
+        root = healthy_arch(tmp_path)
+        # Write a second immutable file with a real lock entry, then tamper it.
+        _write(root / "extra.md", _immutable_doc("extra"))
+        real_hash = _ic.sha256_of_file(root / "extra.md")
+        lock_path = root / ".integrity.lock"
+        # Append extra.md with its REAL hash to the lock.
+        lock_path.write_text(
+            lock_path.read_text(encoding="utf-8") + f"extra.md  sha256:{real_hash}\n",
+            encoding="utf-8",
+        )
+        # Verify it is clean first.
+        assert ic.check_inv1(root) == []
+        # Now tamper the file — hash no longer matches.
+        (root / "extra.md").write_text(_immutable_doc("extra") + "\ntampered\n", encoding="utf-8")
+        msgs = ic.check_inv1(root)
+        assert any("MISMATCH" in m and "extra.md" in m for m in msgs), (
+            f"Expected a MISMATCH violation for extra.md; got: {msgs}"
+        )
+        # Surfaces as a CRITICAL violation via the engine.
+        crit = [v for v in ic.run_all(root) if v.invariant_id == "INV1"]
+        assert crit and all(v.severity == "critical" for v in crit)
 
 
 # ---------------------------------------------------------------------------
