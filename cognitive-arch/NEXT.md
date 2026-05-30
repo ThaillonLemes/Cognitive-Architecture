@@ -43,4 +43,4 @@
 
 
 
-status:active next_action:plan-phase-28 phase:phase-27 manifest:manifests/block-156-*.md group:26A note:phases-24-27-complete-roadmap-executed-awaiting-review last_updated:2026-05-30
+status:active next_action:block-156 phase:phase-28 manifest:manifests/block-156-immutability-guards.md group:28A note:phase-28-planned-pilot-escolhe-qual-bloco-executar-primeiro order:156-157-158-sequential-then-159-160-161-parallel last_updated:2026-05-30
