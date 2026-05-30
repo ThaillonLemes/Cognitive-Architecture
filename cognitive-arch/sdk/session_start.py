@@ -138,17 +138,19 @@ def run_health_report(arch_root: Path) -> tuple[bool, str]:
 
 
 def run_pattern_mining(arch_root: Path) -> tuple[bool, str]:
-    """Run full pattern mining pipeline programmatically."""
+    """Close the self-observation loop: extract → analyze (full history) →
+    recommend → render → propose. New proposals land in governance/proposals/.
+    """
     try:
         sys.path.insert(0, str(arch_root / "sdk"))
-        from retro_signals import extract_all
-        from pattern_analyzer import analyze
-        from patterns_report import write_report
+        from patterns_report import run_pipeline
 
-        signals = extract_all(arch_root)
-        patterns = analyze(signals)
-        write_report(patterns, arch_root)
-        return True, f"Extracted {len(signals)} signals → {len(patterns)} patterns"
+        summary = run_pipeline(arch_root, window_size=None, propose=True)
+        return True, (
+            f"Extracted {summary['signals']} signals → {summary['patterns']} patterns "
+            f"({summary['recommendations']} with recommendation) → "
+            f"{summary['proposals_created']} new proposal(s)"
+        )
     except Exception as exc:
         return False, str(exc)
 
@@ -163,6 +165,27 @@ def run_weekly_report(arch_root: Path) -> tuple[bool, str]:
 
 def run_integrity_check(arch_root: Path) -> tuple[bool, str]:
     return _run([sys.executable, "sdk/integrity_check.py", "--verify", "--arch-root", "."], arch_root, "integrity-check")
+
+
+def run_invariant_check(arch_root: Path) -> tuple[bool, str]:
+    """Run the anti-drift engine and return (ok, count-summary).
+
+    SURFACES drift but never aborts the session: `ok` here is just "the runner
+    completed" (always True unless the engine itself blew up, which it won't —
+    run_all degrades errors to warns). The block-close HALT lives in
+    invariant_check.gate_result(), NOT here. Imported in-process (not subprocess)
+    so INV4 sees the live TOOL_RUNNERS and the summary needs no output parsing.
+    """
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        import invariant_check
+        violations = invariant_check.run_all(arch_root)
+        criticals = sum(1 for v in violations if v.severity == "critical")
+        warns = sum(1 for v in violations if v.severity == "warn")
+        tag = " CRITICAL" if criticals else ""
+        return True, f"{criticals} critical, {warns} warn{tag}"
+    except Exception as exc:  # never block session start on a checker hiccup
+        return False, str(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -223,9 +246,13 @@ def run_audit_py(arch_root: Path) -> tuple[bool, str]:
     return _run([sys.executable, "sdk/audit.py", "--arch-root", "."], arch_root, "audit")
 
 
-def run_protocol_updater(arch_root: Path) -> tuple[bool, str]:
-    return _run([sys.executable, "sdk/protocol_updater.py", "--arch-root", "."], arch_root, "protocol-updater")
+def run_phase_forecast(arch_root: Path) -> tuple[bool, str]:
+    return _run([sys.executable, "sdk/phase_forecast.py", "--arch-root", "."], arch_root, "phase-forecast")
 
+
+# Note: proposal generation is folded into pattern-mining (run_pipeline with
+# propose=True) so the loop closes in one tracked tool — no separate
+# protocol-updater runner is needed.
 
 TOOL_RUNNERS = {
     "health-report": run_health_report,
@@ -233,8 +260,9 @@ TOOL_RUNNERS = {
     "dashboard-refresh": run_dashboard,
     "weekly-report": run_weekly_report,
     "integrity-check": run_integrity_check,
+    "invariant-check": run_invariant_check,
     "audit": run_audit_py,
-    "protocol-updater": run_protocol_updater,
+    "phase-forecast": run_phase_forecast,
 }
 
 
@@ -364,6 +392,21 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
     else:
         print(f"  [PROPOSALS] 0 pending — none to review")
 
+    # Invariants summary (Phase 25 / block-146) — SURFACE drift, never abort.
+    # Always printed (independent of whether the invariant-check tool was stale),
+    # so the count is visible every session. The HALT capability lives only in
+    # invariant_check.gate_result() for block-close; here we report and continue.
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        import invariant_check
+        _viol = invariant_check.run_all(arch_root)
+        _crit = sum(1 for v in _viol if v.severity == "critical")
+        _warn = sum(1 for v in _viol if v.severity == "warn")
+        _tag = " [CRITICAL]" if _crit else ""
+        print(f"  [INVARIANTS] {_crit} critical, {_warn} warn{_tag} — see sdk/invariant_check.py")
+    except Exception:
+        pass  # invariant surfacing never blocks session start
+
     # Governor notifications (Phase 21)
     _display_governor_notifications(arch_root)
 
@@ -383,6 +426,17 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
             score = int(m.group(1))
             tag = "HEALTHY" if score >= 90 else "WARNING" if score >= 70 else "CRITICAL"
             print(f"  Health: {score}/100 [{tag}]")
+
+    # Phase-completion forecast (Phase 26 / block-151) — dated estimate next to
+    # Health. In-process call (mirrors [INVARIANTS]) so it prints every session;
+    # wrapped so a forecast hiccup never aborts session start.
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        import phase_forecast
+        _fc = phase_forecast.forecast(arch_root)
+        print(f"  Forecast: {_fc.completion_estimate} ({_fc.confidence})")
+    except Exception:
+        pass  # forecast surfacing never blocks session start
 
     print("=" * 60)
     print()

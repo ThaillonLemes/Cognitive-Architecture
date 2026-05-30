@@ -17,9 +17,52 @@ from pathlib import Path
 LOCK_FILE = ".integrity.lock"
 PROTECTION_FIELD = "protection: immutable"
 
+# A file is immutable ONLY when `protection: immutable` appears as a YAML
+# frontmatter field (a line inside the leading ---...--- block), NOT when the
+# phrase is merely discussed in prose (manifests, phase docs, retros). Matching
+# the field line, optionally quoted (protection: "immutable" / 'immutable'),
+# with trailing whitespace/comment tolerated.
+_FRONTMATTER_PROTECTION_RE = re.compile(
+    r"^\s*protection:\s*['\"]?immutable['\"]?\s*(?:#.*)?$",
+    re.MULTILINE,
+)
+
 
 def sha256_of_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _frontmatter_block(text: str) -> str:
+    """Return the YAML frontmatter (between the leading '---' and the next '---').
+
+    Frontmatter must START the file: the first non-empty line is the opening
+    '---' fence. Returns '' when there is no leading fenced block, so a prose
+    mention of '---' or 'protection: immutable' deeper in the document is never
+    treated as frontmatter.
+    """
+    # Tolerate a UTF-8 BOM and leading blank lines before the opening fence.
+    stripped = text.lstrip("﻿")
+    lead = stripped.lstrip("\r\n")
+    if not lead.startswith("---"):
+        return ""
+    # First line must be exactly a '---' fence (allow trailing whitespace).
+    nl = lead.find("\n")
+    if nl == -1:
+        return ""
+    first = lead[:nl].rstrip()
+    if first != "---":
+        return ""
+    rest = lead[nl + 1:]
+    # Closing fence: a line that is exactly '---' (allow trailing whitespace).
+    m = re.search(r"^---\s*$", rest, re.MULTILINE)
+    if not m:
+        return ""
+    return rest[:m.start()]
+
+
+def is_immutable_text(text: str) -> bool:
+    """True iff the document declares `protection: immutable` in its frontmatter."""
+    return bool(_FRONTMATTER_PROTECTION_RE.search(_frontmatter_block(text)))
 
 
 def load_lock(arch_root: Path) -> dict[str, str]:
@@ -51,7 +94,8 @@ def find_immutable_files(arch_root: Path) -> list[str]:
             text = md_file.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        if PROTECTION_FIELD in text:
+        # Frontmatter field only — a prose mention of the phrase does NOT count.
+        if is_immutable_text(text):
             immutable.append(rel)
     return sorted(immutable)
 

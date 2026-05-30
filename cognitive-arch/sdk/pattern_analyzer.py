@@ -19,8 +19,10 @@ THRESHOLD = 3
 WINDOW_SIZE = 30
 
 
-def _window(signals: list[RetroSignal], size: int = WINDOW_SIZE) -> list[RetroSignal]:
-    """Return the most recent `size` signals."""
+def _window(signals: list[RetroSignal], size: int | None = WINDOW_SIZE) -> list[RetroSignal]:
+    """Return the most recent `size` signals; `size=None` disables windowing."""
+    if size is None:
+        return signals
     return signals[-size:] if len(signals) > size else signals
 
 
@@ -30,7 +32,7 @@ def _window(signals: list[RetroSignal], size: int = WINDOW_SIZE) -> list[RetroSi
 
 def _rule_axiom_violation(signals: list[RetroSignal]) -> list[Pattern]:
     """R1: Any axiom violated >= THRESHOLD times in window."""
-    window = _window(signals)
+    window = signals
     counts: dict[str, list[str]] = defaultdict(list)
     for s in window:
         for ax in s.axioms_violated:
@@ -53,7 +55,7 @@ def _rule_axiom_violation(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_duration_overrun(signals: list[RetroSignal]) -> list[Pattern]:
     """R2: Blocks that took >1.5× their estimate, if >= THRESHOLD in window."""
-    window = _window(signals)
+    window = signals
     overruns = [s.block_id for s in window if s.over_estimate]
     if len(overruns) >= THRESHOLD:
         return [Pattern(
@@ -71,7 +73,7 @@ def _rule_duration_overrun(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_gate_failures(signals: list[RetroSignal]) -> list[Pattern]:
     """R3: Blocks with gate failures >= THRESHOLD in window."""
-    window = _window(signals)
+    window = signals
     failed = [s.block_id for s in window if s.gate_failures > 0]
     if len(failed) >= THRESHOLD:
         return [Pattern(
@@ -89,7 +91,7 @@ def _rule_gate_failures(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_scope_expansion(signals: list[RetroSignal]) -> list[Pattern]:
     """R4: Blocks with scope expansion >= THRESHOLD in window."""
-    window = _window(signals)
+    window = signals
     expanded = [s.block_id for s in window if s.scope_expansion]
     if len(expanded) >= THRESHOLD:
         return [Pattern(
@@ -107,7 +109,7 @@ def _rule_scope_expansion(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_forced_pass(signals: list[RetroSignal]) -> list[Pattern]:
     """R5: Forced passes >= THRESHOLD in window (always critical)."""
-    window = _window(signals)
+    window = signals
     forced = [s.block_id for s in window if s.forced_pass]
     if len(forced) >= THRESHOLD:
         return [Pattern(
@@ -125,7 +127,7 @@ def _rule_forced_pass(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_missing_duration(signals: list[RetroSignal]) -> list[Pattern]:
     """R6: Blocks missing actual_duration_hours >= THRESHOLD in window (velocity data gap)."""
-    window = _window(signals)
+    window = signals
     missing = [s.block_id for s in window if s.duration_actual_h is None]
     if len(missing) >= THRESHOLD:
         return [Pattern(
@@ -143,7 +145,7 @@ def _rule_missing_duration(signals: list[RetroSignal]) -> list[Pattern]:
 
 def _rule_tier_l_overrun(signals: list[RetroSignal]) -> list[Pattern]:
     """R7: L-tier blocks consistently overrun (any 2+ in window, lower threshold for severity)."""
-    window = _window(signals)
+    window = signals
     l_overruns = [s.block_id for s in window if s.tier == "L" and s.over_estimate]
     if len(l_overruns) >= 2:
         return [Pattern(
@@ -205,12 +207,20 @@ _RULES: list[Callable[[list[RetroSignal]], list[Pattern]]] = [
 ]
 
 
-def analyze(signals: list[RetroSignal]) -> list[Pattern]:
-    """Run all detection rules. Returns combined list of detected patterns."""
+def analyze(
+    signals: list[RetroSignal],
+    window_size: int | None = WINDOW_SIZE,
+) -> list[Pattern]:
+    """Run all detection rules over a windowed view of `signals`.
+
+    `window_size=None` disables windowing (full history); default keeps the
+    last `WINDOW_SIZE` (30) signals for backwards compatibility.
+    """
+    window = _window(signals, window_size)
     patterns: list[Pattern] = []
     for rule in _RULES:
         try:
-            patterns.extend(rule(signals))
+            patterns.extend(rule(window))
         except Exception:
             pass  # rule failure must never crash the pipeline
     return patterns

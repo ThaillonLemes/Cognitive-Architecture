@@ -120,19 +120,73 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Path to the cognitive-arch root directory (default: current directory).",
     )
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override the analyzer window (default: 30 blocks). Ignored if --full is set.",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Mine the full block history (disables the rolling window).",
+    )
+    parser.add_argument(
+        "--no-propose",
+        action="store_true",
+        help="Render patterns.md only; skip protocol_updater (which writes proposals).",
+    )
     return parser
+
+
+def run_pipeline(
+    arch_root: Path,
+    window_size: int | None,
+    propose: bool = True,
+) -> dict:
+    """Extract → analyze → recommend → render → propose. Returns a summary dict.
+
+    `window_size=None` disables windowing (full history); otherwise the last
+    `window_size` signals are passed to the analyzer.
+    `propose=True` closes the loop by invoking ProtocolUpdater after rendering.
+    """
+    sys.path.insert(0, str(Path(__file__).parent))
+    from retro_signals import extract_all
+    from pattern_analyzer import analyze
+    from recommendation_engine import recommend
+    from protocol_updater import ProtocolUpdater
+
+    signals = extract_all(arch_root)
+    patterns = analyze(signals, window_size=window_size)
+    recommendations = recommend(patterns)  # mutates Pattern.recommendation in place
+    out = write_report(patterns, arch_root)
+
+    proposals: list = []
+    if propose:
+        proposals = ProtocolUpdater(arch_root).run()
+
+    return {
+        "signals": len(signals),
+        "patterns": len(patterns),
+        "recommendations": len(recommendations),
+        "proposals_created": len(proposals),
+        "report_path": str(out),
+    }
 
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
     from safe_io import force_utf8
     force_utf8()
-    from retro_signals import extract_all
-    from pattern_analyzer import analyze
 
     args = build_parser().parse_args()
     arch_root = Path(args.arch_root)
-    signals = extract_all(arch_root)
-    patterns = analyze(signals)
-    out = write_report(patterns, arch_root)
-    print(f"Written {len(patterns)} patterns to {out}")
+    window_size = None if args.full else args.window
+    summary = run_pipeline(arch_root, window_size=window_size, propose=not args.no_propose)
+    print(
+        f"Written {summary['patterns']} patterns ({summary['recommendations']} with "
+        f"recommendation) to {summary['report_path']}"
+    )
+    if not args.no_propose:
+        print(f"protocol_updater created {summary['proposals_created']} proposal(s).")

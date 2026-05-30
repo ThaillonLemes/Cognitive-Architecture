@@ -19,11 +19,9 @@ _GENERIC = _ARCH.parent / "cognitive-arch-generic"     # sibling scaffold (fixtu
 
 _SKIP = {"__init__.py", "conftest.py"}
 
-# Tools still confirmed broken. block-136 fixed the UTF-8 crashers but missed
-# velocity_inference's --help path: it has no argparse, so `--help` is treated
-# as a block id and reading the empty manifest path opens "." -> PermissionError.
-# block-138 (velocity fix) owns the real fix; tracked as xfail until then.
-_KNOWN_CRASHERS: set[str] = {"velocity_inference.py"}
+# No known crashers. block-136 fixed UTF-8 crashers; block-138 added argparse
+# to velocity_inference and guarded the empty-manifest Path("") path.
+_KNOWN_CRASHERS: set[str] = set()
 
 
 def _tools() -> list[Path]:

@@ -1,8 +1,10 @@
 # PURPOSE: Generate a composite project health report (audit, velocity, forecast, coverage, tracks)
 # INPUTS:  arch-root directory, BLOCK_LOG.md, phases/, design/, tracks/PRIORITY.md
 # OUTPUTS: governance/health-report-YYYY-MM-DD.md
-# DEPS:    stdlib (pathlib, datetime, argparse, re, math, statistics) + project_state, safe_io
-# SEE:     commands/health-report.md, sdk/project_state.py (single source of truth)
+# DEPS:    stdlib (pathlib, datetime, argparse, re, math, statistics) + project_state, safe_io,
+#          health_model (the ONE canonical score — block-149; same number audit.py reports)
+# SEE:     commands/health-report.md, sdk/project_state.py (single source of truth),
+#          sdk/health_model.py, manifests/block-149-reconcile-health.md
 
 """
 Health Report Generator for cognitive-arch projects.
@@ -14,38 +16,21 @@ Usage:
 """
 
 import argparse
-import math
 import re
 import sys
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 from pathlib import Path
 from statistics import mean
 
 # Ensure sibling modules importable when run as script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import health_model
+import phase_forecast
 import project_state
+import velocity_inference
 from safe_io import force_utf8
 force_utf8()
-
-
-# ---------------------------------------------------------------------------
-# File I/O helpers
-# ---------------------------------------------------------------------------
-
-def _read(arch_root: Path, rel: str, default: str = "") -> str:
-    """Read a file relative to arch_root. Returns default if not found."""
-    p = arch_root / rel
-    if not p.exists():
-        return default
-    try:
-        return p.read_text(encoding="utf-8")
-    except OSError:
-        return default
-
-
-def _exists(arch_root: Path, rel: str) -> bool:
-    return (arch_root / rel).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -53,37 +38,30 @@ def _exists(arch_root: Path, rel: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _section_audit(arch_root: Path) -> str:
-    """Compute audit score from audit.sh-style output or heuristic file checks."""
-    errors = 0
-    warnings = 0
-    notes: list[str] = []
+    """Render the audit score section from the ONE canonical health_model (block-149).
 
-    # Check essential files exist
-    essential = ["STATE.md", "NEXT.md", "PROTOCOLS.md", "INDEX.md", "blocks/BLOCK_LOG.md"]
-    for f in essential:
-        if not _exists(arch_root, f):
-            errors += 1
-            notes.append(f"ERROR: {f} missing")
+    This used to run its own `100 - errors*20 - warnings*5` formula — a SECOND,
+    divergent scorer that produced a different number from sdk/audit.py's
+    `100 - e*15 - w*2`. That contradiction is dead: both instruments now read
+    `health_model.compute(arch_root).score`, so the report's headline score is
+    identical to a fresh `python sdk/audit.py` run, by construction.
 
-    # Check for phases/ directory
-    phases_dir = arch_root / "phases"
-    if not phases_dir.exists():
-        warnings += 1
-        notes.append("WARN: phases/ directory missing")
+    The model's `top_drags(3)` (each with its point cost and a one-line fix)
+    becomes the explanatory notes — Phase 26 Exit Criterion 2 surfaces drags here.
 
-    # Check for tracks/ directory
-    if not _exists(arch_root, "tracks/PRIORITY.md"):
-        warnings += 1
-        notes.append("WARN: tracks/PRIORITY.md missing — no Tracks defined yet")
+    Defensive: if the model can't run for any reason, fall back to a clearly-labelled
+    UNKNOWN line rather than crash the whole report.
+    """
+    try:
+        health = health_model.compute(arch_root)
+    except Exception as exc:  # the report must never die on the score section
+        return (
+            "Score: UNKNOWN — health_model.compute failed\n"
+            f"- ERROR: {exc}\n"
+            "- run: python sdk/health_model.py --arch-root . to diagnose"
+        )
 
-    # Check PROTOCOLS.md has S axioms (Phase 10)
-    protocols = _read(arch_root, "PROTOCOLS.md")
-    if "S1:" not in protocols:
-        warnings += 1
-        notes.append("WARN: Security axioms (S1-S5) missing from PROTOCOLS.md")
-
-    score = max(0, 100 - (errors * 20) - (warnings * 5))
-
+    score = health.score
     if score >= 90:
         status = "HEALTHY"
     elif score >= 70:
@@ -91,14 +69,19 @@ def _section_audit(arch_root: Path) -> str:
     else:
         status = "CRITICAL"
 
+    drags = health.top_drags(3)
     lines = [
         f"Score: {score}/100 — {status}",
-        f"Errors: {errors} | Warnings: {warnings}",
+        f"Source: sdk/health_model.py (canonical; same score as `python sdk/audit.py`)",
     ]
-    if notes:
+    if drags:
         lines.append("")
-        for note in notes:
-            lines.append(f"- {note}")
+        lines.append(f"Top drags (worst {len(drags)}):")
+        for f in drags:
+            lines.append(f"- -{f.cost} [{f.key}] {f.detail} — fix: {f.fix}")
+    else:
+        lines.append("")
+        lines.append("- No factor is costing points (100/100).")
 
     return "\n".join(lines)
 
@@ -135,7 +118,13 @@ def _parse_retro_frontmatter(content: str) -> dict:
 
 
 def _collect_velocity_data(arch_root: Path, done_ids: list[str]) -> dict:
-    """Collect (tier, actual_duration_hours) pairs from retrospectives."""
+    """Collect (tier, actual_duration_hours) pairs from retrospectives.
+
+    Tier source priority: retro frontmatter `tier:` → manifest `tier:` fallback.
+    The 26 retros for blocks 086-111 carry `actual_duration_hours` but omit
+    the `tier:` field; without the fallback they're silently dropped and the
+    velocity table reports ~half the samples it should.
+    """
     by_tier: dict[str, list[float]] = {"S": [], "M": [], "L": []}
 
     blocks_dir = arch_root / "blocks"
@@ -146,7 +135,6 @@ def _collect_velocity_data(arch_root: Path, done_ids: list[str]) -> dict:
         # Find retro file: blocks/block-NNN-*.md
         candidates = list(blocks_dir.glob(f"{block_id}-*.md"))
         if not candidates:
-            # Also try just block_id.md
             candidates = list(blocks_dir.glob(f"{block_id}.md"))
         if not candidates:
             continue
@@ -156,15 +144,21 @@ def _collect_velocity_data(arch_root: Path, done_ids: list[str]) -> dict:
         except OSError:
             continue
         fm = _parse_retro_frontmatter(content)
-        tier = fm.get("tier", "").upper()
-        if tier not in by_tier:
-            continue
         try:
             duration = float(fm.get("actual_duration_hours", "0"))
         except (ValueError, TypeError):
             continue
-        if duration > 0:
-            by_tier[tier].append(duration)
+        if duration <= 0:
+            continue
+        tier = fm.get("tier", "").upper()
+        if tier not in by_tier:
+            manifest_path = velocity_inference._locate_manifest(block_id, arch_root)
+            if manifest_path is None:
+                continue
+            tier = velocity_inference._tier_from_manifest(manifest_path)
+            if tier not in by_tier:
+                continue
+        by_tier[tier].append(duration)
 
     return by_tier
 
@@ -190,6 +184,10 @@ def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
         data = by_tier[tier]
         count = len(data)
         confidence = _velocity_confidence(count)
+        if count >= 3:
+            source = "MEASURED"
+        else:
+            source = "ESTIMATED"
         if count > 0:
             m = round(mean(data), 1)
             mn = round(min(data), 1)
@@ -200,7 +198,9 @@ def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
             mn = mx = m
             velocity_means[tier] = _VELOCITY_DEFAULTS[tier]
         conf_label = confidence if count >= 3 else f"INSUFFICIENT DATA — {count} block(s)"
-        rows.append(f"| {tier}    | {count:5} | {m:8} | {mn:7} | {mx:7} | {conf_label} |")
+        rows.append(
+            f"| {tier}    | {count:5} | {m:8} | {mn:7} | {mx:7} | {conf_label} | {source} |"
+        )
 
     # Trend: compare last 5 vs previous 5 blocks with duration data
     all_durations = [d for tier in by_tier.values() for d in tier]
@@ -216,8 +216,8 @@ def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
             trend = "STABLE"
 
     table_header = (
-        "| Tier | Count | Mean (h) | Min (h) | Max (h) | Confidence |\n"
-        "|------|-------|----------|---------|---------|------------|\n"
+        "| Tier | Count | Mean (h) | Min (h) | Max (h) | Confidence | Source |\n"
+        "|------|-------|----------|---------|---------|------------|--------|\n"
     )
     section = table_header + "\n".join(rows) + f"\n\nTrend (last 5 vs previous 5): {trend}"
     return section, velocity_means
@@ -228,6 +228,15 @@ def _section_velocity(arch_root: Path, done_ids: list[str]) -> tuple[str, dict]:
 # ---------------------------------------------------------------------------
 
 def _section_phase_progress(arch_root: Path, velocity_means: dict) -> str:
+    """Render the Phase Progress + Forecast section.
+
+    The forecast math (remaining blocks x per-block velocity -> est_days -> dated
+    completion) used to live inline here; it now lives ONCE in
+    sdk/phase_forecast.forecast() so session_start and this report share a single
+    definition. We pass the velocity_means the velocity table already computed so
+    the report's two views can never drift, and read the block counts via the same
+    shared helper the forecaster uses.
+    """
     phases_dir = arch_root / "phases"
     if not phases_dir.exists():
         return "No phases/ directory found."
@@ -240,34 +249,18 @@ def _section_phase_progress(arch_root: Path, velocity_means: dict) -> str:
         return "No phase files found in phases/."
 
     phase_name = current_phase_file.stem
-    content = current_phase_file.read_text(encoding="utf-8") if current_phase_file.exists() else ""
 
-    # Count done vs total blocks by looking for status in block index table
-    done_count = len(re.findall(r"\|\s*done\s*\|", content, re.IGNORECASE))
-    total_count = max(done_count, len(re.findall(r"\|\s*block-\d+", content, re.IGNORECASE)))
-
-    if total_count == 0:
-        # Try counting from phase file header
-        remaining_match = re.search(r"(\d+)\s+blocks?", content, re.IGNORECASE)
-        if remaining_match:
-            total_count = int(remaining_match.group(1))
-
+    # Block counts + forecast come from phase_forecast (the single source).
+    done_count, total_count = phase_forecast.phase_block_counts(arch_root)
     pct = round(done_count / total_count * 100) if total_count > 0 else 0
 
-    # Phase-forecast
-    remaining_s = max(0, total_count - done_count)  # Simplified: treat unknowns as S
-    remaining_hours = remaining_s * velocity_means.get("S", _VELOCITY_DEFAULTS["S"])
-    est_days = math.ceil(remaining_hours / 4)
-    est_completion = (date.today() + timedelta(days=est_days)).isoformat()
-
-    # Confidence from velocity
-    all_confident = all(v > _VELOCITY_DEFAULTS[t] * 0.5 for t, v in velocity_means.items())
-    confidence = "MEDIUM" if all_confident else "LOW"
+    fc = phase_forecast.forecast(arch_root, velocity_means=velocity_means)
+    est_completion = fc.completion_estimate
 
     lines = [
         f"Current phase: {phase_name}",
         f"Blocks complete: {done_count}/{total_count} ({pct}%)",
-        f"Estimated completion: {est_completion} (Confidence: {confidence})",
+        f"Estimated completion: {est_completion} (Confidence: {fc.confidence})",
     ]
     return "\n".join(lines)
 

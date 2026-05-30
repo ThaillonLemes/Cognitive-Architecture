@@ -1,14 +1,20 @@
-# sdk/velocity_inference.py
-# Infers block implementation duration from git commit timestamps.
-# Callers: block-close prompt, audit check 9, health report generator.
-# Returns (hours: float, source: str) where source is 'auto-inferred' or 'estimated'.
+# PURPOSE: Infer block implementation duration from git commit timestamps; expose tier from manifest.
+# INPUTS:  block_id (CLI positional) + --arch-root; reads manifests/<block_id>-*.md and git log.
+# OUTPUTS: (hours: float, source: 'auto-inferred'|'estimated') ; CLI prints "<block>: <h>h (<source>)".
+# DEPS:    stdlib only (subprocess, re, argparse, pathlib) + safe_io.
+# SEE:     phases/phase-23.md block-138, sdk/health_report.py, blocks/block-086-velocity-activation.md
 
 from __future__ import annotations
 
-import subprocess
+import argparse
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from safe_io import force_utf8
 
 
 TIER_ESTIMATES = {"S": 1.0, "M": 3.0, "L": 7.0}
@@ -33,12 +39,27 @@ def _git_timestamps_for_files(files: list[str], arch_root: Path) -> list[float]:
         return []
 
 
+def _is_real_file(p: Optional[Path]) -> bool:
+    """True iff p is a non-empty Path that points to an existing regular file.
+
+    Guards against Path("") (which resolves to "." on Windows and turns a
+    read_text() call into a PermissionError on the current directory).
+    """
+    if p is None:
+        return False
+    if str(p) in ("", "."):
+        return False
+    try:
+        return p.is_file()
+    except OSError:
+        return False
+
+
 def _files_from_manifest(manifest_path: Path) -> list[str]:
     """Extract files.modify and files.create paths from a manifest YAML frontmatter."""
-    if not manifest_path.exists():
+    if not _is_real_file(manifest_path):
         return []
     text = manifest_path.read_text(encoding="utf-8")
-    # Collect lines after 'modify:' or 'create:' until next key
     files: list[str] = []
     in_section = False
     for line in text.splitlines():
@@ -57,13 +78,22 @@ def _files_from_manifest(manifest_path: Path) -> list[str]:
 
 def _tier_from_manifest(manifest_path: Path) -> str:
     """Return tier (S/M/L) from manifest frontmatter, defaulting to 'M'."""
-    if not manifest_path.exists():
+    if not _is_real_file(manifest_path):
         return "M"
     for line in manifest_path.read_text(encoding="utf-8").splitlines():
         m = re.match(r"^tier:\s*([SML])", line)
         if m:
             return m.group(1)
     return "M"
+
+
+def _locate_manifest(block_id: str, arch_root: Path) -> Optional[Path]:
+    """Return manifests/<block_id>-*.md if exactly one exists, else None."""
+    manifests_dir = arch_root / "manifests"
+    if not manifests_dir.exists():
+        return None
+    candidates = list(manifests_dir.glob(f"{block_id}-*.md"))
+    return candidates[0] if candidates else None
 
 
 def infer_duration(
@@ -80,12 +110,9 @@ def infer_duration(
     if arch_root is None:
         arch_root = Path(__file__).parent.parent
 
-    # Locate manifest
-    manifests_dir = arch_root / "manifests"
-    candidates = list(manifests_dir.glob(f"{block_id}-*.md"))
-    manifest_path = candidates[0] if candidates else Path("")
+    manifest_path = _locate_manifest(block_id, arch_root)
 
-    files = _files_from_manifest(manifest_path)
+    files = _files_from_manifest(manifest_path) if manifest_path else []
     timestamps = _git_timestamps_for_files(files, arch_root)
 
     if len(timestamps) >= 2:
@@ -95,14 +122,42 @@ def infer_duration(
         if 0 < hours <= 24:
             return hours, "auto-inferred"
 
-    # Fallback: tier-based estimate
-    tier = _tier_from_manifest(manifest_path)
+    tier = _tier_from_manifest(manifest_path) if manifest_path else "M"
     return TIER_ESTIMATES.get(tier, 3.0), "estimated"
 
 
-if __name__ == "__main__":
-    import sys
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
-    block = sys.argv[1] if len(sys.argv) > 1 else "block-086"
-    hours, source = infer_duration(block)
-    print(f"{block}: {hours}h ({source})")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="velocity_inference",
+        description="Infer a block's active implementation hours from git timestamps.",
+    )
+    parser.add_argument(
+        "block_id",
+        nargs="?",
+        default="block-086",
+        help="Block ID to infer (e.g. block-137). Defaults to block-086 for smoke runs.",
+    )
+    parser.add_argument(
+        "--arch-root",
+        metavar="PATH",
+        default=".",
+        help="Path to the cognitive-arch root directory (default: current directory).",
+    )
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    force_utf8()
+    args = build_parser().parse_args(argv)
+    arch_root = Path(args.arch_root).resolve()
+    hours, source = infer_duration(args.block_id, arch_root)
+    print(f"{args.block_id}: {hours}h ({source})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

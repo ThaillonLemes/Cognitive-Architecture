@@ -118,11 +118,10 @@ def _update_state_md(arch_root: Path, last_block: str, next_block: str, blocks_d
     content = re.sub(r"last_updated:\S+", f"last_updated:{_now()}", content)
     content = re.sub(r"status_detail:\S+", f"status_detail:block-{last_block}-done", content)
 
-    # Append new blocks to blocks_done
-    for bid in blocks_done_extra:
-        full_id = f"block-{bid}" if not bid.startswith("block-") else bid
-        if full_id not in content:
-            content = re.sub(r"(blocks_done:[^\n]+)", rf"\1,{full_id}", content)
+    # blocks_done is no longer maintained inline in STATE.md (block-141): blocks/BLOCK_LOG.md
+    # is the single source of truth for the done-set (read via project_state.completed_block_ids).
+    # blocks_done_extra is accepted for signature compatibility but intentionally unused.
+    _ = blocks_done_extra
 
     _atomic_write(state_path, content)
 

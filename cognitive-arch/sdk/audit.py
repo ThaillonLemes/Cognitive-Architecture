@@ -2,13 +2,16 @@
 # PURPOSE: Cross-platform Python replacement for audit.sh (all 10 checks).
 #          Works on Windows, Mac, Linux without bash. Outputs JSON option for dashboard.
 #          Saves ~500 tokens per run (no manual interpretation needed).
+#          The headline Score: is the ONE canonical health_model number (block-149) —
+#          audit is the per-check detail view of that shared model, not a 2nd formula.
 # INPUTS:  arch root — reads all governance files, manifests, blocks
 # OUTPUTS: Console report (default) or JSON (--json flag)
-# DEPS:    stdlib only; delegates checks 7+8 to audit_helpers.py, check 10 to integrity_check.py
+# DEPS:    stdlib only; delegates checks 7+8 to audit_helpers.py, check 10 to integrity_check.py;
+#          health_model.py for the unified score (lazy import — health_model imports audit).
 # USAGE:   python sdk/audit.py --arch-root .
 #          python sdk/audit.py --arch-root . --json
 #          python sdk/audit.py --arch-root . --strict
-# SEE:     audit.sh, commands/audit.md, sdk/audit_helpers.py
+# SEE:     audit.sh, commands/audit.md, sdk/audit_helpers.py, sdk/health_model.py
 
 from __future__ import annotations
 
@@ -38,10 +41,13 @@ _fix_utf8()
 # ---------------------------------------------------------------------------
 
 class AuditResult:
-    def __init__(self) -> None:
+    def __init__(self, arch_root: Optional[Path] = None) -> None:
         self.errors: list[str] = []
         self.warnings: list[str] = []
         self.oks: list[str] = []
+        # The root audited — set by run_audit so the score can come from the
+        # canonical health_model (block-149). None only in ad-hoc construction.
+        self.arch_root: Optional[Path] = arch_root
 
     def err(self, msg: str) -> None:
         self.errors.append(msg)
@@ -59,14 +65,32 @@ class AuditResult:
     def passed(self) -> bool:
         return len(self.errors) == 0
 
+    def score(self) -> int:
+        """The ONE canonical health score — delegated to health_model (block-149).
+
+        Audit no longer owns a scoring formula; it is the per-check detail view of
+        the shared model, so `audit`, `health_report`, and `health_model` always
+        report the SAME number (the 32-vs-100 contradiction is gone).
+
+        Imported lazily because health_model imports audit (avoids an import cycle).
+        Defensive: if the root is unknown or the model can't be imported/run, fall
+        back to the historical 100 - e*15 - w*2 so audit still yields a number and
+        never crashes — the model is the source of truth whenever it's available.
+        """
+        if self.arch_root is not None:
+            try:
+                import health_model  # lazy: health_model imports audit at module load
+                return health_model.compute(self.arch_root).score
+            except Exception:
+                pass  # fall through to the legacy estimate below
+        return max(0, 100 - len(self.errors) * 15 - len(self.warnings) * 2)
+
     def to_dict(self) -> dict:
-        # Score: start 100, -15 per error, -2 per warning, min 0
-        score = max(0, 100 - len(self.errors) * 15 - len(self.warnings) * 2)
         return {
             "passed": self.passed,
             "errors": self.errors,
             "warnings": self.warnings,
-            "score": score,
+            "score": self.score(),
         }
 
 
@@ -98,8 +122,9 @@ SIZE_BUDGETS = {
     "NEXT.md": 30,
     "INDEX.md": 250,
     "board.md": 150,
-    "_syntax.md": 100,
 }
+# _syntax.md reclassified WARM/on-demand (block-142): vocab for AI-only files,
+# not a mandatory boot read — kept out of HOT cost/budget lists. Bytes immutable.
 
 def check2_size_budgets(root: Path, r: AuditResult) -> None:
     print("[2/10] File size budgets...")
@@ -356,7 +381,7 @@ def check10_integrity(root: Path, r: AuditResult, strict: bool = False) -> None:
 def print_token_estimates(root: Path) -> None:
     print("\n[INFO] HOT file token estimates (chars/4):")
     total = 0
-    for f in ["CLAUDE.md", "PROTOCOLS.md", "STATE.md", "NEXT.md", "INDEX.md", "_syntax.md", "board.md"]:
+    for f in ["CLAUDE.md", "PROTOCOLS.md", "STATE.md", "NEXT.md", "INDEX.md", "board.md"]:
         p = root / f
         if p.exists():
             chars = len(p.read_bytes())
@@ -374,7 +399,7 @@ def print_token_estimates(root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def run_audit(root: Path, strict: bool = False, as_json: bool = False) -> AuditResult:
-    r = AuditResult()
+    r = AuditResult(arch_root=root)
     print("=" * 50)
     print("  cognitive-arch AUDIT (Python — cross-platform)")
     print("=" * 50)
@@ -396,7 +421,8 @@ def run_audit(root: Path, strict: bool = False, as_json: bool = False) -> AuditR
         print("=" * 50)
         print(f"  Errors:   {len(r.errors)}")
         print(f"  Warnings: {len(r.warnings)}")
-        print(f"  Score:    {r.to_dict()['score']}/100")
+        # Score is the canonical health_model number (block-149), NOT a local formula.
+        print(f"  Score:    {r.score()}/100")
         print(f"  Result:   {'PASS' if r.passed else 'FAIL'}")
         print("=" * 50)
 
