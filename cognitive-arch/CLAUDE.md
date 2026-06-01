@@ -73,6 +73,6 @@ Partial-read (`Read(file, limit:30)`) when scanning. Code files: header per `pro
 ## Generation rules
 
 - Phase: `templates/phase.md` + `protocols/phase-generation.md`
-- Manifest: `templates/manifest-{small,medium,large}.md` + matching protocol
-- Retro: `templates/block-retrospective.md` + `protocols/block-retrospective-generation.md`
+- Manifest: `templates/manifest-{small,medium,large}-v2.md` + matching protocol (`manifest-intake.md` para kind:intake)
+- Retro: `templates/block-retrospective-v2.md` + `protocols/block-retrospective-generation.md`
 - ADR: `templates/ADR.md` · AGENT.md: `templates/AGENT.md` + `protocols/agents.md`
