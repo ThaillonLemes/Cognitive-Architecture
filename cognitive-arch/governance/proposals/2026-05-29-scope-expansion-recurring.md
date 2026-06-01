@@ -2,7 +2,7 @@
 id: 2026-05-29-scope-expansion-recurring
 status: accepted
 pattern_id: scope-expansion-recurring
-target_file: templates/manifest-medium.md
+target_file: templates/manifest-medium-v2.md
 proposed_change: |
   [AI suggestion] Review and update templates/manifest-medium.md to address the recurring pattern 'scope-expansion-recurring'.
   Pattern detected 9 times. See evidence blocks below.

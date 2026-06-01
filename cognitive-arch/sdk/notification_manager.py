@@ -170,11 +170,16 @@ def _replace_block(text: str, key: str, new_block: str) -> str:
     return clean[:pos] + new_block + "---\n"
 
 
+def _write_file_unlocked(path: Path, items: list[Notification], key: str = "notifications") -> None:
+    """Write notification file — caller must already hold the lock."""
+    text = _read_file(path)
+    new_block = _render_notifications(items, key)
+    path.write_text(_replace_block(text, key, new_block), encoding="utf-8")
+
+
 def _write_file(path: Path, items: list[Notification], key: str = "notifications") -> None:
     with _acquire_lock(path):
-        text = _read_file(path)
-        new_block = _render_notifications(items, key)
-        path.write_text(_replace_block(text, key, new_block), encoding="utf-8")
+        _write_file_unlocked(path, items, key)
 
 
 # ---------------------------------------------------------------------------
@@ -225,17 +230,18 @@ class Governor:
         source: str = "manual",
     ) -> str:
         """Add notification. Idempotent: same message+type returns existing id."""
-        items = self._load()
-        for n in items:
-            if n.message == message and n.type == type_ and n.status != "dismissed":
-                return n.id
-        today = date.today().isoformat()
-        nid = _make_id(type_, today, items)
-        items.append(Notification(
-            id=nid, type=type_, message=message, priority=priority,
-            status="pending", source=source, created_at=today,
-        ))
-        _write_file(self.notifications_path, items)
+        with _acquire_lock(self.notifications_path):
+            items = _parse_notifications(_read_file(self.notifications_path))
+            for n in items:
+                if n.message == message and n.type == type_ and n.status != "dismissed":
+                    return n.id
+            today = date.today().isoformat()
+            nid = _make_id(type_, today, items)
+            items.append(Notification(
+                id=nid, type=type_, message=message, priority=priority,
+                status="pending", source=source, created_at=today,
+            ))
+            _write_file_unlocked(self.notifications_path, items)
         _log_event(self.log_path, "add", nid, source)
         return nid
 
@@ -244,50 +250,61 @@ class Governor:
         return [n for n in items if n.status == "pending"] if pending_only else items
 
     def seen(self, notification_id: str) -> bool:
-        items = self._load()
-        today = date.today().isoformat()
-        for n in items:
-            if n.id == notification_id:
-                if n.status == "pending":
-                    n.status = "seen"
-                    n.seen_at = today
-                _write_file(self.notifications_path, items)
-                _log_event(self.log_path, "seen", notification_id, "governor")
-                return True
-        return False
+        found = False
+        with _acquire_lock(self.notifications_path):
+            items = _parse_notifications(_read_file(self.notifications_path))
+            today = date.today().isoformat()
+            for n in items:
+                if n.id == notification_id:
+                    if n.status == "pending":
+                        n.status = "seen"
+                        n.seen_at = today
+                    _write_file_unlocked(self.notifications_path, items)
+                    found = True
+                    break
+        if found:
+            _log_event(self.log_path, "seen", notification_id, "governor")
+        return found
 
     def dismiss(self, notification_id: str, force: bool = False) -> tuple[bool, str]:
-        items = self._load()
-        today = date.today().isoformat()
-        for n in items:
-            if n.id == notification_id:
-                if n.status == "dismissed":
-                    return False, f"Already dismissed: {notification_id}"
-                n.status = "dismissed"
-                n.dismissed_at = today
-                if n.seen_at == "~":
-                    n.seen_at = today
-                _write_file(self.notifications_path, items)
-                _log_event(self.log_path, "dismiss", notification_id, "governor")
-                return True, f"Dismissed: {notification_id}"
-        return False, f"Not found: {notification_id}"
+        result: tuple[bool, str] = (False, f"Not found: {notification_id}")
+        with _acquire_lock(self.notifications_path):
+            items = _parse_notifications(_read_file(self.notifications_path))
+            today = date.today().isoformat()
+            for n in items:
+                if n.id == notification_id:
+                    if n.status == "dismissed":
+                        result = (False, f"Already dismissed: {notification_id}")
+                        break
+                    n.status = "dismissed"
+                    n.dismissed_at = today
+                    if n.seen_at == "~":
+                        n.seen_at = today
+                    _write_file_unlocked(self.notifications_path, items)
+                    result = (True, f"Dismissed: {notification_id}")
+                    break
+        if result[0]:
+            _log_event(self.log_path, "dismiss", notification_id, "governor")
+        return result
 
     def archive_old(self, days: int = 30) -> int:
-        items = self._load()
         cutoff = date.today() - timedelta(days=days)
-        to_archive, to_keep = [], []
-        for n in items:
-            if n.status == "dismissed" and n.dismissed_at != "~":
-                try:
-                    if date.fromisoformat(n.dismissed_at) < cutoff:
-                        to_archive.append(n)
-                        continue
-                except ValueError:
-                    pass
-            to_keep.append(n)
-        if not to_archive:
-            return 0
-        _write_file(self.notifications_path, to_keep)
+        to_archive: list[Notification] = []
+        with _acquire_lock(self.notifications_path):
+            items = _parse_notifications(_read_file(self.notifications_path))
+            to_keep = []
+            for n in items:
+                if n.status == "dismissed" and n.dismissed_at != "~":
+                    try:
+                        if date.fromisoformat(n.dismissed_at) < cutoff:
+                            to_archive.append(n)
+                            continue
+                    except ValueError:
+                        pass
+                to_keep.append(n)
+            if not to_archive:
+                return 0
+            _write_file_unlocked(self.notifications_path, to_keep)
         archived = _parse_notifications(
             _read_file(self.archive_path), key="notifications_archive"
         )

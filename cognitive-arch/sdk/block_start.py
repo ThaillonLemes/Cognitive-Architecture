@@ -44,13 +44,17 @@ def _find_manifest(arch_root: Path, block_id: str) -> Path | None:
 
 
 def _read_manifest(path: Path) -> dict[str, str]:
-    """Extract key fields from manifest frontmatter and body."""
+    """Extract key fields from manifest frontmatter and body.
+
+    Block-164: reads size, importance, wip_stage in addition to v1 tier.
+    """
     text = path.read_text(encoding="utf-8", errors="replace")
     data: dict[str, str] = {}
     # Frontmatter
     parts = text.split("---", 2)
     fm = parts[1] if len(parts) >= 3 else ""
-    for key in ("id", "phase", "tier", "status", "dependencies"):
+    for key in ("id", "phase", "tier", "size", "importance", "status",
+                "dependencies", "kind", "wip_stage"):
         m = re.search(rf"^{key}:\s*(.+)", fm, re.MULTILINE)
         if m:
             data[key] = m.group(1).strip().strip('"[]')
@@ -105,7 +109,11 @@ def start_block(
         return results
 
     manifest = _read_manifest(manifest_path)
-    print(f"  Manifest: {manifest_path.name} | phase={manifest.get('phase','?')} tier={manifest.get('tier','?')}")
+    # v2 manifests use size+importance; v1 use tier
+    size_label = manifest.get("size") or manifest.get("tier", "?")
+    importance_label = manifest.get("importance", "")
+    tier_display = f"size={size_label}" + (f" importance={importance_label}" if importance_label else "")
+    print(f"  Manifest: {manifest_path.name} | phase={manifest.get('phase','?')} {tier_display}")
     results["manifest"] = "ok"
 
     # --- Step 2: Dependencies check ---
@@ -129,11 +137,27 @@ def start_block(
 
     # --- Step 3: Update STATE.md ---
     phase = manifest.get("phase", "unknown")
-    update_state(arch_root, {
+    state_updates: dict[str, str | bool] = {
         "status": "active",
         "phase": phase,
         "next": block_id,
-    })
+        "wip_stage": manifest.get("wip_stage") or "implementing",
+    }
+    update_state(arch_root, state_updates)
+
+    # block-173: stamp started_at in manifest via velocity_tracker
+    try:
+        vt_path = arch_root / "sdk" / "velocity_tracker.py"
+        if vt_path.exists():
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("velocity_tracker", vt_path)
+            vt = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(vt)
+            ts = vt.stamp_started(arch_root, block_id)
+            if ts:
+                print(f"  velocity_tracker: started_at={ts}")
+    except Exception:
+        pass  # never block start on tracker failure
     print(f"  STATE.md: status=active phase={phase} next={block_id}")
     results["state"] = "ok"
 

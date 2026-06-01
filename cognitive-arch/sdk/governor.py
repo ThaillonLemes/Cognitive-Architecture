@@ -42,7 +42,7 @@ def read_arch_file(relative_path: str) -> str:
     full = ARCH_ROOT / relative_path
     if not full.exists():
         return f"(not found: {relative_path})"
-    return full.read_text(encoding="utf-8").strip()
+    return full.read_text(encoding="utf-8", errors="replace").strip()
 
 
 # ---------------------------------------------------------------------------

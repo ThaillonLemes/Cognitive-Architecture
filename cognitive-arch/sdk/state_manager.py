@@ -129,6 +129,53 @@ def update_next(arch_root: Path, updates: dict[str, str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# PilotState — corporate mode tracking (block-163)
+# ---------------------------------------------------------------------------
+
+class PilotState:
+    """State oriented to the Pilot (corporate mode). Stored in STATE.md as extra keys.
+
+    Fields:
+      current_client   — active client/project name
+      tickets_open     — count of open tickets (int)
+      knowledge_gaps   — comma-separated list of areas not yet scanned
+      last_scan_at     — ISO timestamp of last codebase_scanner run
+    """
+
+    def __init__(self, arch_root: Path) -> None:
+        self._root = arch_root
+        raw = read_state(arch_root)
+        self.current_client: str = raw.get("current_client", "")
+        self.last_scan_at: str = raw.get("last_scan_at", "")
+        try:
+            self.tickets_open: int = int(raw.get("tickets_open", "0"))
+        except ValueError:
+            self.tickets_open = 0
+        gap_raw = raw.get("knowledge_gaps", "")
+        self.knowledge_gaps: list[str] = [g for g in gap_raw.split(",") if g.strip()]
+
+    def save(self) -> None:
+        updates: dict[str, str] = {
+            "current_client": self.current_client or "~",
+            "tickets_open": str(self.tickets_open),
+            "knowledge_gaps": ",".join(self.knowledge_gaps) if self.knowledge_gaps else "~",
+        }
+        if self.last_scan_at:
+            updates["last_scan_at"] = self.last_scan_at
+        update_state(self._root, updates)
+
+    def set_client(self, name: str) -> None:
+        self.current_client = name
+
+    def add_gap(self, area: str) -> None:
+        if area not in self.knowledge_gaps:
+            self.knowledge_gaps.append(area)
+
+    def clear_gap(self, area: str) -> None:
+        self.knowledge_gaps = [g for g in self.knowledge_gaps if g != area]
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 

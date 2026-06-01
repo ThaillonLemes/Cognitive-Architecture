@@ -1,7 +1,7 @@
 # PURPOSE: Send task packets to Claude sub-agents via Anthropic SDK; collect return packages
 # INPUTS:  task packet string, Anthropic API key (env), governor mode, fallback timeout
 # OUTPUTS: DispatchResult (raw_response, validated return package, timing metadata)
-# DEPS:    anthropic>=0.25.0, sdk/return_validator, stdlib (os, time, threading)
+# DEPS:    anthropic>=0.25.0, sdk/return_validator, stdlib (os, time, threading, datetime)
 # SEE:     protocols/governor-dispatch.md, protocols/governor-failure-handling.md,
 #          design/governor-v2.md §6, sdk/task_packet.py, sdk/return_validator.py
 
@@ -18,6 +18,13 @@ Token tracking:
     - Mock mode:  realistic placeholders (tok_in=100, tok_out=500)
     - Manual mode: both remain 0 (no dispatch occurred)
 
+Retry / resilience (SDK mode only):
+    _sdk_dispatch() retries up to DEFAULT_MAX_RETRIES times on any exception, using
+    exponential backoff (2^attempt seconds between attempts). This covers transient
+    API errors, network timeouts, and rate-limit bursts without manual intervention.
+    The number of attempts used is reported in DispatchResult.metadata["attempts"]
+    and logged to governance/dispatch-log.md for benchmark tracking.
+
 Usage (module):
     from sdk.dispatch import dispatch_block, DispatchResult, MockAnthropicClient
     result = dispatch_block(task_packet_str, mode="mock")
@@ -27,8 +34,10 @@ Usage (CLI test):
     python sdk/dispatch.py --packet-file manifests/block-033-dispatch-module.md --mode manual
 """
 
+import datetime
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -46,9 +55,10 @@ from return_validator import validate_package, ValidationResult  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL          = "claude-opus-4-5"
+DEFAULT_MODEL          = "claude-sonnet-4-6"
 DEFAULT_MAX_TOKENS     = 4096
 DEFAULT_TIMEOUT_SEC    = 300     # 5 minutes per block (fallback timer)
+DEFAULT_MAX_RETRIES    = 2       # retries on transient SDK errors (2 = up to 3 total attempts)
 ANTHROPIC_API_KEY_ENV  = "ANTHROPIC_API_KEY"
 
 # System prompt Governor sends alongside the task packet
@@ -64,6 +74,9 @@ Follow the sub-agent contract (protocols/sub-agent-contract.md):
   6. Emit exactly ONE return package as your final message (templates/sub-agent-return.md format).
 Do NOT emit STATE.md, NEXT.md, board.md, or BLOCK_LOG.md changes. Governor handles all state.
 """
+
+# Lock for thread-safe appends to governance/dispatch-log.md
+_dispatch_log_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +95,41 @@ class DispatchResult:
     tok_in: int = 0
     tok_out: int = 0
     metadata: dict = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Dispatch log (SDK mode instrumentation)
+# ---------------------------------------------------------------------------
+
+def _append_dispatch_log(
+    block_id: str,
+    mode: str,
+    attempts: int,
+    success: bool,
+    error_type: str,
+    elapsed_sec: float,
+) -> None:
+    """Append a structured entry to governance/dispatch-log.md (best-effort, fails silently)."""
+    arch_root = _SDK_DIR.parent
+    log_path = arch_root / "governance" / "dispatch-log.md"
+    if not log_path.parent.exists():
+        return
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    row = f"| {ts} | {block_id} | {mode} | {attempts} | {success} | {error_type or '-'} | {elapsed_sec:.2f}s |\n"
+    with _dispatch_log_lock:
+        try:
+            if not log_path.exists():
+                header = (
+                    "# dispatch-log — SDK dispatch instrumentation\n\n"
+                    "| ts | block_id | mode | attempts | success | error_type | elapsed_sec |\n"
+                    "|---|---|---|---|---|---|---|\n"
+                )
+                log_path.write_text(header + row, encoding="utf-8")
+            else:
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(row)
+        except OSError:
+            pass  # log failure must never surface to caller
 
 
 # ---------------------------------------------------------------------------
@@ -117,16 +165,27 @@ class MockAnthropicClient:
 # SDK client wrapper
 # ---------------------------------------------------------------------------
 
-def _sdk_dispatch(task_packet: str, api_key: str, model: str, max_tokens: int) -> tuple[str, int, int]:
+def _sdk_dispatch(
+    task_packet: str,
+    api_key: str,
+    model: str,
+    max_tokens: int,
+    timeout_sec: float = DEFAULT_TIMEOUT_SEC,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+) -> tuple[str, int, int, int]:
     """
-    Send task packet to Claude via Anthropic SDK.
+    Send task packet to Claude via Anthropic SDK with automatic retry on transient errors.
+
+    Retries up to max_retries times using exponential backoff (2^attempt seconds between
+    retries). Covers transient API errors, network blips, and rate-limit bursts.
 
     Returns:
-        (response_text, input_tokens, output_tokens)
+        (response_text, input_tokens, output_tokens, attempts_used)
+        attempts_used = 1 on first-try success; up to max_retries + 1 on retried success.
 
     Raises:
         ImportError if anthropic package is not installed.
-        Exception on API error.
+        Exception (last attempt's exception) after all retries exhausted.
     """
     try:
         import anthropic
@@ -135,17 +194,25 @@ def _sdk_dispatch(task_packet: str, api_key: str, model: str, max_tokens: int) -
             "anthropic package not installed. Run: pip install -r sdk/requirements.txt"
         )
 
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": task_packet}],
-    )
-    response_text = message.content[0].text
-    tok_in  = message.usage.input_tokens
-    tok_out = message.usage.output_tokens
-    return response_text, tok_in, tok_out
+    client = anthropic.Anthropic(api_key=api_key, timeout=timeout_sec)
+    last_exc: Optional[Exception] = None
+    for attempt in range(max_retries + 1):
+        try:
+            message = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": task_packet}],
+            )
+            response_text = message.content[0].text
+            tok_in  = message.usage.input_tokens
+            tok_out = message.usage.output_tokens
+            return response_text, tok_in, tok_out, attempt + 1
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                time.sleep(2 ** attempt)
+    raise last_exc  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +226,7 @@ def dispatch_block(
     model: str = DEFAULT_MODEL,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     timeout_sec: float = DEFAULT_TIMEOUT_SEC,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> DispatchResult:
     """
     Dispatch a single block to a sub-agent and collect the return package.
@@ -169,10 +237,12 @@ def dispatch_block(
         api_key:      Anthropic API key. Falls back to ANTHROPIC_API_KEY env var.
         model:        Claude model name.
         max_tokens:   Max tokens for sub-agent response.
-        timeout_sec:  Fallback timer in seconds.
+        timeout_sec:  Per-block timeout in seconds (SDK mode).
+        max_retries:  Max retry attempts on transient SDK errors (SDK mode only).
 
     Returns:
-        DispatchResult with success flag, raw response, and validation.
+        DispatchResult with success flag, raw response, validation, and metadata.
+        metadata["attempts"] = number of SDK calls made (SDK mode only).
     """
     # Extract block ID for logging
     block_id = "???"
@@ -227,19 +297,27 @@ def dispatch_block(
             elapsed_sec=time.monotonic() - start,
         )
 
+    # Pessimistic default: assume all retries exhausted; overwritten on success
+    attempts = max_retries + 1
     try:
-        raw, tok_in, tok_out = _sdk_dispatch(task_packet, resolved_key, model, max_tokens)
+        raw, tok_in, tok_out, attempts = _sdk_dispatch(
+            task_packet, resolved_key, model, max_tokens, timeout_sec, max_retries
+        )
     except Exception as exc:
+        elapsed = time.monotonic() - start
+        _append_dispatch_log(block_id, "sdk", attempts, False, type(exc).__name__, elapsed)
         return DispatchResult(
             block_id=block_id,
             mode="sdk",
             success=False,
             error=str(exc),
-            elapsed_sec=time.monotonic() - start,
+            elapsed_sec=elapsed,
+            metadata={"attempts": attempts},
         )
 
     validation = validate_package(raw)
     elapsed = time.monotonic() - start
+    _append_dispatch_log(block_id, "sdk", attempts, validation.valid, "", elapsed)
     return DispatchResult(
         block_id=block_id,
         mode="sdk",
@@ -250,6 +328,7 @@ def dispatch_block(
         elapsed_sec=elapsed,
         tok_in=tok_in,
         tok_out=tok_out,
+        metadata={"attempts": attempts},
     )
 
 
@@ -265,6 +344,7 @@ def dispatch_batch(
     max_tokens: int = DEFAULT_MAX_TOKENS,
     timeout_sec: float = DEFAULT_TIMEOUT_SEC,
     max_workers: int = 4,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> list[DispatchResult]:
     """
     Dispatch multiple task packets concurrently using ThreadPoolExecutor.
@@ -272,14 +352,22 @@ def dispatch_batch(
     Integration (state file updates via integrate_group) must be called
     sequentially AFTER this function returns — it is not thread-safe.
 
+    Timeout model:
+        timeout_sec     = per-worker timeout (passed to each dispatch_block call).
+        timeout_sec * 1.5 = outer wall-clock cap for as_completed(). Workers run in
+        parallel, so the wall-clock max is ~timeout_sec, not timeout_sec * n_workers.
+        The 1.5× buffer accommodates API slowness without the multi-minute waits that
+        timeout_sec × n_workers produced when the API was degraded.
+
     Args:
         task_packets: List of task packet strings to dispatch.
         mode:         "sdk" | "mock" | "manual" (applied to all packets).
         api_key:      Anthropic API key (SDK mode only).
         model:        Claude model name.
         max_tokens:   Max tokens per sub-agent response.
-        timeout_sec:  Per-block timeout.
+        timeout_sec:  Per-block timeout (also sets outer cap via × 1.5).
         max_workers:  Thread pool size (capped at len(task_packets)).
+        max_retries:  Max retry attempts per worker on transient SDK errors.
 
     Returns:
         List of DispatchResult objects in the same order as task_packets.
@@ -300,13 +388,15 @@ def dispatch_batch(
                 model=model,
                 max_tokens=max_tokens,
                 timeout_sec=timeout_sec,
+                max_retries=max_retries,
             ): idx
             for idx, packet in enumerate(task_packets)
         }
-        for future in as_completed(futures):
+        # Outer cap = 1.5× per-worker timeout (workers run in parallel, not series)
+        for future in as_completed(futures, timeout=timeout_sec * 1.5):
             idx = futures[future]
             try:
-                results[idx] = future.result()
+                results[idx] = future.result(timeout=timeout_sec)
             except Exception as exc:
                 results[idx] = DispatchResult(
                     block_id="???",

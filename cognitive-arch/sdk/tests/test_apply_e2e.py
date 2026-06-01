@@ -38,12 +38,12 @@ REAL_ROOT = _SDK_DIR.parent
 
 # Real proposals (governance/proposals/index.md):
 #   accepted + immutable target  -> must be REFUSED with no write.
-_REAL_IMMUTABLE_SCOPE = "2026-05-29-scope-expansion-recurring"   # -> templates/manifest-medium.md (immutable)
+_REAL_IMMUTABLE_SCOPE = "2026-05-29-scope-expansion-recurring"   # -> templates/manifest-medium-v2.md (immutable)
 _REAL_IMMUTABLE_GATES = "2026-05-29-gate-failures-recurring"     # -> protocols/block-close-checklist.md (immutable)
 #   rejected + NON-immutable target -> guard refuses on ACCEPTANCE, never on immutability.
 _REAL_NONIMMUTABLE_REJECTED = "2026-05-29-velocity-data-gap"     # -> protocols/block-complexity-estimator.md (NON-immutable)
 _REAL_NONIMMUTABLE_TARGET = "protocols/block-complexity-estimator.md"
-_REAL_IMMUTABLE_SCOPE_FILE = "templates/manifest-medium.md"
+_REAL_IMMUTABLE_SCOPE_FILE = "templates/manifest-medium-v2.md"
 
 
 # ---------------------------------------------------------------------------

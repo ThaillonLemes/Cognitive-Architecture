@@ -295,7 +295,7 @@ class TestGuardRefused:
     def test_real_immutable_proposal_refused_via_module(self):
         # The real scope-expansion proposal targets an immutable, locked template.
         # confirm=True still REFUSES at the guard and writes nothing to the repo.
-        target = _ARCH_ROOT / "templates" / "manifest-medium.md"
+        target = _ARCH_ROOT / "templates" / "manifest-medium-v2.md"
         before = target.read_bytes()
         result = apply_proposal(_REAL_IMMUTABLE, _ARCH_ROOT, confirm=True)
         after = target.read_bytes()
@@ -415,7 +415,7 @@ class TestAtomicHelpers:
 class TestCLI:
     def test_cli_apply_dry_run_refused_real_immutable(self, capsys):
         from proposal_apply import main
-        target = _ARCH_ROOT / "templates" / "manifest-medium.md"
+        target = _ARCH_ROOT / "templates" / "manifest-medium-v2.md"
         before = target.read_bytes()
         backups_existed = (_ARCH_ROOT / "_backups").exists()
 

@@ -191,3 +191,53 @@ tools:
     priority: high
     last_run: "never"
     mutable_by: master
+
+  - id: ticket-intake
+    name: "Ticket intake"
+    command: "python sdk/ticket_intake.py --ticket '<text>' --client <name> --arch-root ."
+    description: "Converts free-text ticket into a corporate manifest (kind: intake). Entry point of corporate workflow."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: consistency-checker
+    name: "Consistency checker"
+    command: "python sdk/consistency_checker.py --profile governance/project-profile-<client>.md --diff changes.diff"
+    description: "Checks code against project profile L3/L4 patterns. Levels B (naming+imports) and C (internal style). Threshold never falls."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: velocity-tracker
+    name: "Velocity tracker"
+    command: "python sdk/velocity_tracker.py --status --block-id <block-id> --arch-root ."
+    description: "Captures real time per block (started_at, paused_at, resumed_at, finished_at, actual_duration_hours). Supports pause/resume for meeting time exclusion."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master
+
+  - id: forecast-engine
+    name: "Forecast engine"
+    command: "python sdk/forecast_engine.py --arch-root . --open-tickets <N>"
+    description: "Generates velocity forecast HTML: tickets/day, delivery estimate, confidence, parallelism recommendation. Uses actual_duration_hours from manifests."
+    recommended_interval_days: 1
+    trigger_type: time
+    priority: medium
+    last_run: "never"
+    mutable_by: master
+
+  - id: calendar-manager
+    name: "Calendar manager"
+    command: "python sdk/calendar_manager.py --list --arch-root ."
+    description: "Manages pilot-calendar.yaml: add/remove meetings, recurring support, today/upcoming alerts injected in session_start."
+    recommended_interval_days: 0
+    trigger_type: event
+    priority: high
+    last_run: "never"
+    mutable_by: master

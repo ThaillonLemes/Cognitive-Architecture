@@ -189,12 +189,12 @@ class TestNeverRaises:
 
 class TestImmutability:
     def test_immutable_target_flagged_true(self):
-        # Real accepted proposal targets templates/manifest-medium.md (immutable).
+        # Real accepted proposal targets templates/manifest-medium-v2.md (immutable).
         result = generate_diff(_REAL_ACCEPTED, _ARCH_ROOT)
         assert result.status == "accepted"
         assert result.is_immutable is True
         assert result.unified_diff != ""
-        assert "templates/manifest-medium.md" in result.unified_diff
+        assert "templates/manifest-medium-v2.md" in result.unified_diff
 
     def test_non_immutable_target_flagged_false(self, tmp_path):
         _write_proposal(tmp_path, "synthetic-accepted", _accepted_proposal())
@@ -272,7 +272,7 @@ class TestCLI:
     def test_cli_writes_nothing_to_target(self, capsys):
         # The real accepted target must be byte-identical after a CLI run.
         from proposal_apply import main
-        target = _ARCH_ROOT / "templates" / "manifest-medium.md"
+        target = _ARCH_ROOT / "templates" / "manifest-medium-v2.md"
         before = target.read_bytes()
         rc = main(["--arch-root", str(_ARCH_ROOT), "--proposal", _REAL_ACCEPTED])
         after = target.read_bytes()

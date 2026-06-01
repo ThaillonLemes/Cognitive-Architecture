@@ -1,0 +1,6 @@
+# governance/pilot-calendar.yaml
+# Edited by AI when Piloto dictates meetings.
+# Interface: python sdk/calendar_manager.py --add-meeting "YYYY-MM-DD HH:MM <Nh> <desc>"
+# See: design/forecast-calendar.md §3
+
+meetings:

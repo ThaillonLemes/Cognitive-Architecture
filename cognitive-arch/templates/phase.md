@@ -1,22 +1,35 @@
-# Template: Phase doc
+# Template: Phase doc — Dual-Mode (v2)
+# Atualizado em: 2026-06-01 (design/block-phase-redesign.md)
+# Modos: mmorpg | corporate | shared
 
-BRIEF: Skeleton for a phase roadmap doc. Phase docs go in `phases/phase-N.md`. Fill using `protocols/phase-generation.md`. Sections marked OPTIONAL are AI-decided based on phase complexity.
+BRIEF: Skeleton para doc de fase. Fases ficam em `phases/phase-N.md`. Usar `protocols/phase-generation.md`.
+Seções marcadas [mmorpg] são opcionais no modo corporativo. Seções marcadas [corporate] são opcionais no mmorpg.
+Seções sem marcação são obrigatórias em ambos os modos.
 
-Copy this file to `phases/phase-<N>.md` and fill in placeholders.
+**Nota de modo:**
+- **corporate/feature** → usar as 5 seções obrigatórias abaixo. Opcionais apenas se claramente úteis.
+- **corporate/workday** → workday NÃO tem documento. É representado por `current_workday` no STATE.md.
+- **mmorpg** → usar todas as seções aplicáveis; OPTIONAL segue a instrução original.
+
+Copiar para `phases/phase-<N>.md`.
 
 ---
 
 ```yaml
 ---
 id: phase-<N>
-status: planned                       # planned | active | complete
-prev_phase: phase-<N-1>               # or "none" if first
-exit_criteria_count: <number>
+mode: mmorpg | corporate | shared    # herdado pelo governor e pelos blocos
+type: feature | mmorpg               # feature = fase corporativa; mmorpg = fase de produto
+status: planned                      # planned | active | complete
+prev_phase: phase-<N-1>              # ou "none" se for a primeira
 blocks_count: <number>
-estimated_duration_minutes: <number>  # optional; Tier S≈15min, Tier M≈40min
 created_at: YYYY-MM-DD
 last_updated: YYYY-MM-DD
 owner: <agent or human>
+# [corporate]:
+# client_id: ~                       # nome do cliente ou projeto
+# [mmorpg]:
+# estimated_duration_minutes: <number>   # S≈15min, M≈40min, L≈120min
 ---
 ```
 
@@ -24,85 +37,118 @@ owner: <agent or human>
 
 # Phase <N> — <Title>
 
-BRIEF: 3 lines max — what this phase delivers in plain language.
+BRIEF: 2 linhas max — o que esta fase entrega.
 
-## 1. Purpose [REQUIRED]
+---
 
-One paragraph. What does this phase accomplish? What is the outcome?
+## 1. Objective [REQUIRED]
 
-## 2. Goals [REQUIRED]
+**[corporate]:** Um parágrafo. O que esta feature entrega ao cliente? Qual o resultado observável?
 
-3-7 bullets. Each concrete and testable.
-- Goal 1
-- Goal 2
-- ...
+**[mmorpg]:** Um parágrafo. O que esta fase entrega ao projeto? Qual o outcome?
 
-## 3. Invariants [OPTIONAL — include if phase has cross-cutting properties to preserve]
+---
 
-Properties that must hold true throughout the phase. Examples:
-- API X remains backward-compatible
-- Performance budget Y is not exceeded
-- No new external dependencies
+## 2. Tickets / Block Index [REQUIRED]
 
-## 4. Dependencies [REQUIRED]
+**[corporate]:** Lista de ticket_ids incluídos nesta feature.
 
-What must be true before this phase starts:
-- Phase <N-1> exit criteria all met
-- [Other prior phases or external dependencies]
-- [Design docs that must be filled]
+| ticket_id | Título | Status | Block |
+|-----------|--------|--------|-------|
+| <ID> | <título> | planned | `manifests/block-<NNN>-<slug>.md` |
 
-## 5. Risks [OPTIONAL — include if ≥3 blocks OR cross-system OR new abstraction]
+**[mmorpg]:** Tabela de blocos.
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| <risk> | <high/med/low> | <plan> |
+| Block | Título | Status | Manifest |
+|-------|--------|--------|----------|
+| <ID> | <título> | planned | `manifests/block-<ID>-<slug>.md` |
 
-## 6. Validation [OPTIONAL — include if phase introduces test types beyond unit]
+---
 
-How we know the phase is done. Test types that apply:
-- Unit tests
-- Integration tests
-- End-to-end tests
-- Performance benchmarks
-- Soak tests
-- Security audits
+## 3. Exit Criteria [REQUIRED]
 
-## 7. Exit Criteria [REQUIRED]
+Lista numerada. Cada item AUDITÁVEL — não "parece bom", mas "X está medido e passou".
 
-Numbered list. Every item AUDITABLE.
-1. <criterion 1>
-2. <criterion 2>
+1. <critério 1>
+2. <critério 2>
 3. ...
 
-## 8. Block Index [REQUIRED]
+**[corporate]:** Incluir: "Todos os acceptance_criteria dos tickets foram atendidos e teach-ready passou."
 
-| Block | Title | Status | Manifest |
-|-------|-------|--------|----------|
-| <ID> | <title> | planned | `manifests/block-<ID>-<slug>.md` |
+---
 
-## 9. Dependency Graph & Parallel Execution Plan [OPTIONAL — include if ≥3 blocks with deps]
+## 4. Out of Scope [REQUIRED]
 
-```yaml
-parallel_execution_plan:
-  total_blocks: <count>
-  recommended_agents: <count>           # AI-computed from DAG
-  groups:
-    - id: <Na>
-      blocks: [<id1>, <id2>]
-      type: parallel | sequential
-      depends_on: []                    # group IDs
-    - id: <Nb>
-      blocks: [<id3>]
-      type: sequential
-      depends_on: [<Na>]
-```
-
-## 10. Out of Scope [REQUIRED]
-
-What this phase explicitly does NOT do:
+O que esta fase explicitamente NÃO faz:
 - <deferral 1>
 - <deferral 2>
 
 ---
 
-End of phase template.
+## 5. Phase Retrospective Summary [REQUIRED — preencher ao fechar]
+
+*Gerado ao fechar a fase. Fornece dados para velocity e forecast.*
+
+```yaml
+phase_retro:
+  completed_at: YYYY-MM-DDTHH:MMZ
+  total_blocks: <N>
+  blocks_done: <N>
+  total_hours: <N>                    # soma de actual_duration_hours dos blocos
+  tickets_delivered: <N>              # [corporate]
+  velocity_tickets_per_day: <N>       # [corporate]
+  highlights: []                      # o que foi melhor que o esperado
+  lowlights: []                       # o que foi pior que o esperado
+  decisions: []                       # decisões arquiteturais ou de processo tomadas na fase
+```
+
+---
+
+## 6. Dependencies [mmorpg — REQUIRED; corporate — OPTIONAL]
+
+O que deve ser verdade antes desta fase começar:
+- Phase <N-1> exit criteria todos atendidos
+- [Outras dependências]
+
+---
+
+## 7. Goals [mmorpg — REQUIRED se ≥3 blocos; corporate — omitir — use tickets em §2]
+
+3–7 bullets. Cada um concreto e testável.
+- Goal 1
+- Goal 2
+
+---
+
+## 8. Invariants [OPTIONAL — include if cross-cutting properties must be preserved]
+
+Propriedades que devem ser verdadeiras durante toda a fase:
+- API X permanece backward-compatible
+- Budget de performance Y não é excedido
+
+---
+
+## 9. Risks [OPTIONAL — include if ≥3 blocks OR cross-system]
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| <risco> | high/med/low | <plano> |
+
+---
+
+## 10. Dependency Graph & Parallel Execution Plan [mmorpg — OPTIONAL; corporate — raramente necessário]
+
+```yaml
+parallel_execution_plan:
+  total_blocks: <count>
+  recommended_agents: <count>
+  groups:
+    - id: <Na>
+      blocks: [<id1>, <id2>]
+      type: parallel | sequential
+      depends_on: []
+```
+
+---
+
+End of phase template (v2 — dual-mode).

@@ -115,3 +115,20 @@ class TestCloseBlockTokEnforcement:
         (tmp_arch / "manifests").mkdir(exist_ok=True)
         result = close_block(tmp_arch, "block-999", force=True)
         assert result.get("halted") is not True
+
+
+class TestCloseBlockRetroGate:
+    def test_close_halts_without_retro(self, tmp_arch):
+        from block_close import close_block
+        (tmp_arch / "blocks").mkdir(exist_ok=True)
+        (tmp_arch / "manifests").mkdir(exist_ok=True)
+        result = close_block(tmp_arch, "block-998", force=False)
+        assert result.get("retro_check") == "missing"
+        assert result.get("halted") is True
+
+    def test_close_with_force_skips_retro_halt(self, tmp_arch):
+        from block_close import close_block
+        (tmp_arch / "blocks").mkdir(exist_ok=True)
+        (tmp_arch / "manifests").mkdir(exist_ok=True)
+        result = close_block(tmp_arch, "block-998", force=True)
+        assert result.get("halted") is not True

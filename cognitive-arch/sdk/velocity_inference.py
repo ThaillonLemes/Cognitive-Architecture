@@ -18,6 +18,7 @@ from safe_io import force_utf8
 
 
 TIER_ESTIMATES = {"S": 1.0, "M": 3.0, "L": 7.0}
+SIZE_ESTIMATES = {"XS": 0.5, "S": 1.5, "M": 3.0, "L": 6.0, "XL": 12.0}  # block-173 v2
 
 
 def _git_timestamps_for_files(files: list[str], arch_root: Path) -> list[float]:
@@ -77,14 +78,36 @@ def _files_from_manifest(manifest_path: Path) -> list[str]:
 
 
 def _tier_from_manifest(manifest_path: Path) -> str:
-    """Return tier (S/M/L) from manifest frontmatter, defaulting to 'M'."""
+    """Return tier (S/M/L) or size (XS/S/M/L/XL) from manifest frontmatter, defaulting to 'M'.
+
+    block-173: also accepts v2 `size:` field.
+    """
     if not _is_real_file(manifest_path):
         return "M"
     for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        # v2: size field
+        m = re.match(r"^size:\s*(XS|S|M|L|XL)", line)
+        if m:
+            return m.group(1)
+        # v1: tier field
         m = re.match(r"^tier:\s*([SML])", line)
         if m:
             return m.group(1)
     return "M"
+
+
+def _actual_hours_from_manifest(manifest_path: Path) -> Optional[float]:
+    """Return actual_duration_hours from manifest if stamped by velocity_tracker."""
+    if not _is_real_file(manifest_path):
+        return None
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^actual_duration_hours:\s*([0-9.]+)", line)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+    return None
 
 
 def _locate_manifest(block_id: str, arch_root: Path) -> Optional[Path]:
@@ -108,13 +131,20 @@ def infer_duration(
     Estimate active implementation hours for a block.
 
     Returns (hours, source) where source is:
+      'actual'        — from actual_duration_hours field in manifest (velocity_tracker, block-173)
       'auto-inferred' — derived from git commit timestamp spread for block files
-      'estimated'     — tier-based fallback when git data is unavailable
+      'estimated'     — tier/size-based fallback when no real data available
     """
     if arch_root is None:
         arch_root = Path(__file__).parent.parent
 
     manifest_path = _locate_manifest(block_id, arch_root)
+
+    # block-173: prefer actual_duration_hours if stamped
+    if manifest_path:
+        actual = _actual_hours_from_manifest(manifest_path)
+        if actual is not None and actual > 0:
+            return actual, "actual"
 
     files = _files_from_manifest(manifest_path) if manifest_path else []
     timestamps = _git_timestamps_for_files(files, arch_root)
@@ -126,8 +156,10 @@ def infer_duration(
         if 0 < hours <= 24:
             return hours, "auto-inferred"
 
+    # v2: use SIZE_ESTIMATES if size field present
     tier = _tier_from_manifest(manifest_path) if manifest_path else "M"
-    return TIER_ESTIMATES.get(tier, 3.0), "estimated"
+    estimate = SIZE_ESTIMATES.get(tier) or TIER_ESTIMATES.get(tier, 3.0)
+    return estimate, "estimated"
 
 
 # ---------------------------------------------------------------------------

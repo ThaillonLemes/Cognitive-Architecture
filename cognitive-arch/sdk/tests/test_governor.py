@@ -244,3 +244,59 @@ class TestGovernorArchiveOld:
         n = gov.archive_old(days=30)
         assert n == 0  # dismissed today — not old enough
         assert len(gov.list()) == 1
+
+
+class TestAtomicReadModifyWrite:
+    """Verify CRUD methods do read-modify-write inside a single lock (no lost-update gap)."""
+
+    def test_add_does_not_call_write_file_with_lock(self, tmp_path, monkeypatch):
+        """add() must call _write_file_unlocked (inside lock), not _write_file (double-lock)."""
+        root, _ = _make_env(tmp_path)
+        import notification_manager as nm
+        write_file_calls = []
+        write_file_unlocked_calls = []
+        original_unlocked = nm._write_file_unlocked
+
+        def spy_write_file(path, items, key="notifications"):
+            write_file_calls.append(1)
+
+        def spy_unlocked(path, items, key="notifications"):
+            write_file_unlocked_calls.append(1)
+            original_unlocked(path, items, key)
+
+        monkeypatch.setattr(nm, "_write_file", spy_write_file)
+        monkeypatch.setattr(nm, "_write_file_unlocked", spy_unlocked)
+        gov = Governor(root)
+        gov.add("test msg", type_="custom")
+        assert write_file_calls == [], "_write_file (double-lock) must not be called by add()"
+        assert write_file_unlocked_calls == [1], "_write_file_unlocked must be called once"
+
+    def test_seen_uses_unlocked_write(self, tmp_path, monkeypatch):
+        root, _ = _make_env(tmp_path, _NOTIF_WITH_ONE)
+        import notification_manager as nm
+        write_file_calls = []
+        original_unlocked = nm._write_file_unlocked
+
+        def spy_write_file(path, items, key="notifications"):
+            write_file_calls.append(1)
+
+        monkeypatch.setattr(nm, "_write_file", spy_write_file)
+        monkeypatch.setattr(nm, "_write_file_unlocked", original_unlocked)
+        gov = Governor(root)
+        gov.seen("pattern-2026-05-28-001")
+        assert write_file_calls == [], "seen() must not call _write_file (would double-lock)"
+
+    def test_dismiss_uses_unlocked_write(self, tmp_path, monkeypatch):
+        root, _ = _make_env(tmp_path, _NOTIF_WITH_ONE)
+        import notification_manager as nm
+        write_file_calls = []
+        original_unlocked = nm._write_file_unlocked
+
+        def spy_write_file(path, items, key="notifications"):
+            write_file_calls.append(1)
+
+        monkeypatch.setattr(nm, "_write_file", spy_write_file)
+        monkeypatch.setattr(nm, "_write_file_unlocked", original_unlocked)
+        gov = Governor(root)
+        gov.dismiss("pattern-2026-05-28-001")
+        assert write_file_calls == [], "dismiss() must not call _write_file (would double-lock)"

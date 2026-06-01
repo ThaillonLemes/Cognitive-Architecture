@@ -35,6 +35,9 @@ from safe_io import force_utf8
 # health_report._VELOCITY_DEFAULTS so the shared forecast reads the same hours
 # whichever caller drives it.
 VELOCITY_DEFAULTS = {"S": 1.0, "M": 3.5, "L": 9.0}
+# block-173/174: velocity_inference.infer_duration now returns source='actual' when
+# actual_duration_hours is stamped by velocity_tracker — this file benefits automatically
+# because _measure_tier_hours calls infer_duration which reads actual_duration_hours first.
 
 # block-138 discipline: a tier mean is MEASURED only with >= this many real
 # samples; below it the number is an ESTIMATE and must be labelled as such.

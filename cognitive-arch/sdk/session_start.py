@@ -222,7 +222,9 @@ def _read_state(arch_root: Path) -> dict:
     text = state_path.read_text(encoding="utf-8", errors="replace")
     data = {}
     for line in text.splitlines():
-        for key in ("p", "status", "last_block", "notes"):
+        # Block-163: extended key list includes dual-mode fields
+        for key in ("p", "status", "last_block", "notes", "mode", "current_client",
+                    "tickets_open", "last_scan_at"):
             m = re.search(rf"\b{key}:(\S+)", line)
             if m:
                 data[key] = m.group(1)
@@ -316,11 +318,17 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         print(f"  Session gap: {gap_h:.1f}h since last run")
     print("=" * 60)
 
-    # Read project state
+    # Read project state — dual-mode (block-163)
     state = _read_state(arch_root)
     next_action = _read_next(arch_root)
-    print(f"\n  Phase: {state.get('p', '?')} | Status: {state.get('status', '?')}")
+    mode = state.get("mode", "mmorpg")
+    print(f"\n  Phase: {state.get('p', '?')} | Status: {state.get('status', '?')} | Mode: {mode}")
     print(f"  Last block: {state.get('last_block', '?')} | Next: {next_action}")
+    if mode == "corporate":
+        client = state.get("current_client", "~")
+        tickets = state.get("tickets_open", "0")
+        last_scan = state.get("last_scan_at", "never")
+        print(f"  Client: {client} | Open tickets: {tickets} | Last scan: {last_scan}")
     print()
 
     # Run stale tools
@@ -405,6 +413,22 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         print(f"  [INVARIANTS] {_crit} critical, {_warn} warn{_tag} — see sdk/invariant_check.py")
     except Exception:
         pass  # invariant surfacing never blocks session start
+
+    # block-175: Calendar alerts (show before anything else in the day)
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        from calendar_manager import get_today_alerts, get_upcoming_alerts
+        today_alerts = get_today_alerts(arch_root)
+        upcoming_alerts = get_upcoming_alerts(arch_root, days=2)
+        if today_alerts:
+            print()
+            for alert in today_alerts:
+                print(f"  ⚠️  REUNIÃO: {alert}")
+        if upcoming_alerts:
+            for alert in upcoming_alerts:
+                print(f"  📅  {alert}")
+    except Exception:
+        pass  # never block session start on calendar failure
 
     # Governor notifications (Phase 21)
     _display_governor_notifications(arch_root)

@@ -215,7 +215,9 @@ def check4_ai_file_format(root: Path, r: AuditResult) -> None:
 # Check 5: Manifest schema
 # ---------------------------------------------------------------------------
 
-_REQUIRED_MANIFEST_KEYS = ["id", "tier", "kind", "status", "files"]
+# v2 manifests use size+importance instead of tier; accept either
+_REQUIRED_MANIFEST_KEYS_V1 = ["id", "tier", "kind", "status", "files"]
+_REQUIRED_MANIFEST_KEYS_V2 = ["id", "size", "importance", "kind", "status", "files"]
 
 def _extract_frontmatter(text: str) -> str:
     parts = text.split("---", 2)
@@ -230,7 +232,10 @@ def check5_manifest_schema(root: Path, r: AuditResult) -> None:
     errors = 0
     for mf in manifests:
         fm = _extract_frontmatter(mf.read_text(encoding="utf-8", errors="replace"))
-        for key in _REQUIRED_MANIFEST_KEYS:
+        # Detect v1 (has tier:) vs v2 (has size:) manifest format
+        is_v2 = bool(re.search(r"^size:", fm, re.MULTILINE))
+        keys = _REQUIRED_MANIFEST_KEYS_V2 if is_v2 else _REQUIRED_MANIFEST_KEYS_V1
+        for key in keys:
             if not re.search(rf"^{key}:", fm, re.MULTILINE):
                 r.warn(f"manifest-schema: {mf.name} missing '{key}:'")
                 errors += 1

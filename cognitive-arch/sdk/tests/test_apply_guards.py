@@ -110,11 +110,11 @@ class TestImmutabilityGuard:
         assert "integrity-bump.md" in joined  # points the human to the gate
 
     def test_real_immutable_proposal_refused(self):
-        # The real scope-expansion proposal targets templates/manifest-medium.md
+        # The real scope-expansion proposal targets templates/manifest-medium-v2.md
         # (immutable, locked clean, no bump for it in governor-log) -> REFUSED.
         result = check_guards(_REAL_IMMUTABLE, _ARCH_ROOT)
         assert result.allowed is False
-        assert result.target_file == "templates/manifest-medium.md"
+        assert result.target_file == "templates/manifest-medium-v2.md"
         assert any("immutability guard" in r for r in result.reasons)
 
     def test_immutable_target_with_recorded_bump_allowed(self, tmp_path):
@@ -421,7 +421,7 @@ class TestCLI:
         # The real immutable target must be byte-identical after a guard CLI run,
         # and no _backups/ dir is created at the real root.
         from proposal_apply import main
-        target = _ARCH_ROOT / "templates" / "manifest-medium.md"
+        target = _ARCH_ROOT / "templates" / "manifest-medium-v2.md"
         before = target.read_bytes()
         backups_existed = (_ARCH_ROOT / "_backups").exists()
         rc = main(["--arch-root", str(_ARCH_ROOT), "--proposal", _REAL_IMMUTABLE, "--check-guards"])
@@ -460,7 +460,7 @@ def _setup_arch(root):
 # ---- block-156 tests --------------------------------------------------------
 
 def test_integrity_bump_no_basename_collision(tmp_path):
-    """A bump for templates/manifest-medium.md must NOT unlock archive/manifest-medium.md."""
+    """A bump for templates/manifest-medium-v2.md must NOT unlock archive/manifest-medium.md."""
     _setup_arch(tmp_path)
     # Two immutable files sharing a basename in different dirs
     (tmp_path / "templates").mkdir(exist_ok=True)
@@ -476,17 +476,17 @@ def test_integrity_bump_no_basename_collision(tmp_path):
         h = hashlib.sha256(p.read_bytes()).hexdigest()
         with open(lock_path, "a") as fh:
             fh.write(f"{d}/manifest-medium.md  sha256:{h}\n")
-    # Bump names ONLY templates/manifest-medium.md
+    # Bump names ONLY templates/manifest-medium-v2.md
     log = tmp_path / "governance" / "governor-log.md"
     log.parent.mkdir(exist_ok=True)
     log.write_text(
         "# --- INTEGRITY BUMP APPROVED ---\n"
-        "# file: templates/manifest-medium.md\n"
+        "# file: templates/manifest-medium-v2.md\n"
         "# --- END INTEGRITY BUMP ---\n"
     )
     pa = ProposalApply(tmp_path)
     # templates — must be True (exact match)
-    assert pa._has_integrity_bump("templates/manifest-medium.md") is True
+    assert pa._has_integrity_bump("templates/manifest-medium-v2.md") is True
     # archive — must be False (basename collision must not authorize)
     assert pa._has_integrity_bump("archive/manifest-medium.md") is False
 

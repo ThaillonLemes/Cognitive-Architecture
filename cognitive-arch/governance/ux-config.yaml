@@ -16,3 +16,31 @@ dashboard_notifications_max: 3
 # UX validator settings
 ux_validator_exit_zero: true  # always exit 0, even with violations
 ux_validator_max_violations_display: 20
+
+# Scanner HTML output (block-168)
+scanner_html_output: true     # false = suppress HTML from all scans
+
+# Pipeline HTML toggles (block-168 / design/pipeline.md)
+html_output:
+  scanner_l0: true
+  scanner_partial: true
+  pipeline_implement: true
+  pipeline_quality_b: true
+  pipeline_quality_c: false    # default OFF — sugestões proativas (falsos positivos)
+  pipeline_teach_technical: true
+  pipeline_teach_team: true
+  pipeline_teach_learning: true
+
+# Consistency checker levels (block-170)
+consistency_checker:
+  level_b: true                # naming + imports + organização (padrão ON)
+  level_c: false               # estilo interno — default OFF
+
+# Teach mode abstraction dial (block-172)
+abstraction_level: tecnico     # leigo | iniciante | tecnico
+
+# Teach HTML per-audience (block-172)
+teach_html:
+  technical: true
+  team: true
+  learning: true

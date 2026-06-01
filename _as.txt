@@ -1,0 +1,87 @@
+==================================================
+  cognitive-arch AUDIT (Python — cross-platform)
+==================================================
+[1/10] HOT files exist...
+  OK:    all HOT files present
+[2/10] File size budgets...
+  WARN:  NEXT.md exceeds budget (46 > 30 lines)
+[3/10] Pointer integrity...
+  WARN:  broken pointer in decisions\README.md: decisions/ADR-001-choose-postgres-over-mysql.md
+  WARN:  broken pointer in protocols\pointer-integrity.md: path/to/file.md
+  WARN:  broken pointer in protocols\pointer-integrity.md: path
+  WARN:  broken pointer in protocols\pointer-integrity.md: design/combat.md
+  WARN:  broken pointer in protocols\pointer-integrity.md: design/combat.md
+  WARN:  broken pointer in governance\proposals\index.md: governance/proposals/2026-05-29-gate-failures-recurring.md
+  WARN:  broken pointer in governance\proposals\index.md: governance/proposals/2026-05-29-scope-expansion-recurring.md
+  WARN:  broken pointer in governance\proposals\index.md: governance/proposals/2026-05-29-velocity-data-gap.md
+[4/10] AI-only file format...
+  OK:    AI-only files format OK
+[5/10] Manifest schema...
+  OK:    manifest schema: all 139 manifests have required keys
+[6/10] Dependency validation...
+  OK:    dep-validation: all done-block dependencies confirmed in BLOCK_LOG
+[7/10] File conflicts...
+  OK:    file-conflict [7]: no planned-manifest fmod conflicts detected
+[8/10] Drift detection...
+  WARN:  drift [8]: 'block-061' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-062' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-063' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-064' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-065' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-066' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-067' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-068' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-069' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-070' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-071' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-072' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-073' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-074' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-075' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-076' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-077' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-078' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-079' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-080' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-081' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-082' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-083' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-084' in BLOCK_LOG but no retrospective found in blocks/
+  WARN:  drift [8]: 'block-085' in BLOCK_LOG but no retrospective found in blocks/
+[9/10] Velocity fields...
+  OK:    velocity: all recent blocks have actual_duration_hours filled
+[10/10] Integrity lock...
+  ERROR: PROTOCOLS.md: MISMATCH
+  OK:    _syntax.md: OK
+  OK:    blocks/block-090-protection-frontmatter.md: OK
+  OK:    blocks/block-125-proposal-resolver.md: OK
+  OK:    blocks/phase-13-retrospective.md: OK
+  OK:    commands/integrity-bump.md: OK
+  OK:    commands/restore.md: OK
+  OK:    manifests/block-090-protection-frontmatter.md: OK
+  OK:    manifests/block-091-integrity-lock.md: OK
+  OK:    phases/phase-13.md: OK
+  OK:    protocols/architecture-integrity.md: OK
+  OK:    protocols/block-close-checklist.md: OK
+  OK:    protocols/pointer-integrity.md: OK
+  OK:    templates/block-retrospective.md: OK
+  OK:    templates/manifest-large.md: OK
+  OK:    templates/manifest-medium.md: OK
+  OK:    templates/manifest-small.md: OK
+
+[INFO] HOT file token estimates (chars/4):
+      CLAUDE.md: ~846 tok
+  [!] PROTOCOLS.md: ~1986 tok
+      STATE.md: ~120 tok
+      NEXT.md: ~73 tok
+      INDEX.md: ~596 tok
+      board.md: ~189 tok
+
+  HOT boot total: ~3811 tok — OK (target: <4000 tok)
+
+==================================================
+  Errors:   1
+  Warnings: 34
+  Score:    80/100
+  Result:   FAIL
+==================================================
