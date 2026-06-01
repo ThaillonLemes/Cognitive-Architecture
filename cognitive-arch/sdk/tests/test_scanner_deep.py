@@ -146,6 +146,46 @@ def test_l4_does_not_store_code():
         assert "return hash" not in text
 
 
+def test_l4_coexistence_no_absolute_paths():
+    """L4 vigente/legado must contain only repo-internal dir names (no drive letters or user paths)."""
+    import os
+    import re
+    import time
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _make_repo(tmp, "fsd")
+        arch = _make_arch(tmp)
+
+        # Create a "legacy" subdir and stamp it 1 year in the past so the
+        # recency split puts it firmly in the "old" bucket.
+        legacy_dir = repo / "src" / "legacy_module"
+        legacy_dir.mkdir()
+        legacy_file = legacy_dir / "old.py"
+        legacy_file.write_text("x = 1\n", encoding="utf-8")
+        old_time = time.time() - 86400 * 365
+        os.utime(legacy_file, (old_time, old_time))
+
+        from scanner_deep import scan_deep
+        result = scan_deep(repo, "L4", arch, "fixture")
+
+        coex = result["l4_coexistence"]
+        for key in ("vigente", "legado"):
+            val = coex[key]
+            # Must not contain Windows drive letters (e.g. "C:/" or "C:\")
+            assert not re.search(r"[A-Za-z]:[/\\]", val), \
+                f"{key} contains drive letter: {val!r}"
+            # Must not contain OS-level user-path components
+            assert "Users" not in val, f"{key} contains 'Users': {val!r}"
+            # Each individual segment must be a short name with no path separators
+            for segment in val.split(", "):
+                name = segment.rstrip("/")
+                if name in ("padrão atual (homogêneo)", "nenhum legado detectado"):
+                    continue
+                assert len(name) < 50, f"{key} segment too long: {name!r}"
+                assert "\\" not in name and "/" not in name, \
+                    f"{key} segment contains path separator: {name!r}"
+
+
 if __name__ == "__main__":
     test_l2_detects_fsd()
     test_l2_includes_proof()

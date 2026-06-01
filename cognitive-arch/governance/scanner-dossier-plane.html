@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scanner Dossier — Plane Web App</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --accent: #58a6ff; --text: #e6edf3; --muted: #8b949e;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149; --purple: #bc8cff;
+    --tag-bg: #1f2428;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px; line-height: 1.6; padding: 0;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px; display: flex; align-items: center; gap: 16px;
+  }
+  .header-icon { font-size: 32px; }
+  .header h1 { font-size: 22px; color: var(--accent); margin-bottom: 2px; }
+  .header .meta { color: var(--muted); font-size: 12px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--tag-bg); border: 1px solid var(--border);
+  }
+  .badge.ok { background: #0a2a14; color: var(--ok); border-color: #3fb95033; }
+  .badge.warn { background: #2a1f0a; color: var(--warn); border-color: #d2992233; }
+  .badge.info { background: #0a1a2a; color: var(--accent); border-color: #58a6ff33; }
+  .badge.purple { background: #1a0a2a; color: var(--purple); border-color: #bc8cff33; }
+
+  /* Nav tabs */
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--card); padding: 0 32px; position: sticky; top: 0; z-index: 10;
+  }
+  .tab {
+    padding: 12px 20px; cursor: pointer; color: var(--muted); font-size: 13px;
+    border-bottom: 2px solid transparent; transition: all .15s; user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Layout */
+  .content { padding: 24px 32px; max-width: 1100px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h3 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+              letter-spacing: .06em; margin-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* Stat boxes */
+  .stat { text-align: center; padding: 12px; }
+  .stat .num { font-size: 36px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .stat .label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; text-align: left; padding: 8px 10px;
+       border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing:.04em; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1c2128; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1c2128; }
+
+  /* Mermaid */
+  .mermaid {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 16px;
+    overflow-x: auto; text-align: center;
+  }
+
+  /* Tags */
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; background: var(--tag-bg); border: 1px solid var(--border);
+    margin: 2px;
+  }
+
+  /* L4 vigente/legado */
+  .pattern-card {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px; border-radius: 8px; margin-bottom: 8px; border: 1px solid;
+  }
+  .pattern-card.vigente { background: #0a2a14; border-color: #3fb95033; }
+  .pattern-card.legado   { background: #2a1a0a; border-color: #d2992233; }
+  .pattern-icon { font-size: 20px; margin-top: 2px; }
+  .pattern-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; }
+  .pattern-dirs { font-family: 'Consolas','Monaco',monospace; font-size: 13px; color: var(--text); margin-top: 4px; }
+  .pattern-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Proof collapse */
+  details { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+  summary { padding: 10px 14px; cursor: pointer; color: var(--muted); font-size: 12px;
+            list-style: none; display: flex; align-items: center; gap: 8px; }
+  summary::before { content: '▶'; font-size: 10px; transition: transform .15s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  details[open] summary { color: var(--text); border-bottom: 1px solid var(--border); }
+  .proof-body { padding: 12px 14px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+  /* Cost footer */
+  .footer {
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 14px 32px; display: flex; gap: 32px; align-items: center;
+    font-size: 12px; color: var(--muted); margin-top: 32px;
+  }
+  .footer strong { color: var(--text); }
+
+  /* Code block */
+  pre {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 16px; font-size: 12px; overflow-x: auto; line-height: 1.5;
+    color: #a5d6ff; font-family: 'Consolas','Monaco',monospace;
+  }
+
+  /* Section title */
+  .section-title {
+    font-size: 15px; font-weight: 600; color: var(--text);
+    margin: 24px 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-icon">🔍</div>
+  <div>
+    <h1>Scanner Dossier — Plane Web App</h1>
+    <div class="meta">
+      <span class="badge info">L0 + L1 + L2 + L3 + L4</span>&nbsp;
+      <span class="badge info">2.065 arquivos</span>&nbsp;
+      <span class="badge ok">Feature-Sliced Design</span>&nbsp;
+      <span class="badge warn">snake_case</span>&nbsp;
+      <span class="badge">TypeScript 99.6%</span>&nbsp;
+      <span style="color:var(--muted);margin-left:8px">Scanned 2026-06-01 · cognitive-arch v3</span>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="show('l0')">🏗️ L0 — Macro</div>
+  <div class="tab" onclick="show('l1')">📂 L1 — Estrutura</div>
+  <div class="tab" onclick="show('l2')">🎯 L2 — Arquitetura</div>
+  <div class="tab" onclick="show('l3')">🎨 L3 — Estética</div>
+  <div class="tab" onclick="show('l4')">⚡ L4 — Coexistência</div>
+</div>
+
+<!-- ==================== L0 ==================== -->
+<div class="content">
+<div id="panel-l0" class="panel active">
+  <div class="section-title">🏗️ Macro Arquitetural — O que é este sistema?</div>
+
+  <div class="grid-3" style="margin-bottom:16px">
+    <div class="card stat"><div class="num">2.065</div><div class="label">Arquivos TypeScript</div></div>
+    <div class="card stat"><div class="num">2.522</div><div class="label">Total de arquivos</div></div>
+    <div class="card stat"><div class="num">99.6%</div><div class="label">TypeScript (TS + TSX)</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Stack Detectada</h3>
+      <table>
+        <tr><th>Campo</th><th>Valor</th></tr>
+        <tr><td>Tipo de sistema</td><td><span class="badge info">web-fullstack</span></td></tr>
+        <tr><td>Framework</td><td>React + Vite (não Next.js — usa <code>react-router.config.ts</code>)</td></tr>
+        <tr><td>Runtime</td><td>Node.js 18+</td></tr>
+        <tr><td>Linguagem</td><td>TypeScript 5.4</td></tr>
+        <tr><td>Build</td><td>Vite (<code>vite.config.ts</code>)</td></tr>
+        <tr><td>Infra</td><td>Docker (<code>Dockerfile.web</code>)</td></tr>
+        <tr><td>Workspace</td><td>Turborepo + pnpm (monorepo)</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Dependências Principais</h3>
+      <table>
+        <tr><th>Pacote</th><th>Categoria</th></tr>
+        <tr><td><code>@atlaskit/pragmatic-drag-and-drop</code></td><td>DnD (Jira-style)</td></tr>
+        <tr><td><code>mobx-react-lite</code></td><td>State management</td></tr>
+        <tr><td><code>@tanstack/react-table</code></td><td>Tabelas</td></tr>
+        <tr><td><code>zustand</code></td><td>State local</td></tr>
+        <tr><td><code>@tiptap/*</code></td><td>Rich text editor</td></tr>
+        <tr><td><code>@plane-ui/*</code></td><td>Design system interno</td></tr>
+        <tr><td><code>@bprogress/core</code></td><td>Progress bar</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Domínio (Lógica de Negócio)</h3>
+    <p style="margin-bottom:10px;color:var(--muted)">Plane é um gerenciador de projetos open source (alternativa ao Jira/Linear). Fluxo principal:</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <span class="tag">Workspace</span>
+      <span style="color:var(--muted)">→</span>
+      <span class="tag">Projects</span>
+      <span style="color:var(--muted)">→</span>
+      <span class="tag">Issues / Tickets</span>
+      <span style="color:var(--muted)">→</span>
+      <span class="tag">Cycles (sprints)</span>
+      <span style="color:var(--muted)">→</span>
+      <span class="tag">Modules</span>
+      <span style="color:var(--muted)">→</span>
+      <span class="tag">Views</span>
+    </div>
+    <p style="color:var(--muted);font-size:12px">
+      Suporta múltiplos workspaces, membros com roles, boards Kanban/List/Gantt,
+      notificações, integrações (GitHub, Slack), e modo offline.
+    </p>
+  </div>
+</div>
+
+<!-- ==================== L1 ==================== -->
+<div id="panel-l1" class="panel">
+  <div class="section-title">📂 Estrutura & Linguagens</div>
+
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <h3>Distribuição de Linguagens</h3>
+      <table>
+        <tr><th>Linguagem</th><th>%</th><th>Arquivos</th></tr>
+        <tr><td>TypeScript/React (.tsx)</td><td>71.6%</td><td>~1.478</td></tr>
+        <tr><td>TypeScript puro (.ts)</td><td>28.0%</td><td>~578</td></tr>
+        <tr><td>JavaScript (.js/.jsx)</td><td>0.1%</td><td>~9</td></tr>
+        <tr><td>JSON/YAML</td><td>0.2%</td><td>~5</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Estrutura Monorepo</h3>
+      <pre>plane/                   ← raiz
+  apps/
+    web/                 ← você está aqui
+    api/                 ← Django (Python)
+    space/               ← espaço público
+    admin/               ← painel admin
+  packages/
+    editor/              ← TipTap wrapper
+    hooks/               ← shared hooks
+    services/            ← API clients
+    ui/                  ← design system</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Árvore de Diretórios — apps/web</h3>
+    <div class="mermaid">
+graph TD
+    ROOT["apps/web/"]
+    ROOT --> APP["app/"]
+    ROOT --> CE["ce/ <br/><small>Community Edition</small>"]
+    ROOT --> CORE["core/ <br/><small>config, contexts</small>"]
+    ROOT --> HELPERS["helpers/ <br/><small>utils, formatters</small>"]
+    ROOT --> STYLES["styles/ <br/><small>global CSS</small>"]
+
+    APP --> ALL["(all)/ <br/><small>autenticado</small>"]
+    APP --> HOME["(home)/"]
+    ALL --> WS["[workspaceSlug]/"]
+    WS --> PROJ["(projects)/"]
+    WS --> SETTINGS["(settings)/"]
+
+    CE --> FEATURES["features/"]
+    CE --> ENTITIES["store/ <br/><small>MobX stores</small>"]
+    CE --> SHARED["services/ <br/><small>API calls</small>"]
+
+    FEATURES --> ISSUES["issues/"]
+    FEATURES --> CYCLES["cycles/"]
+    FEATURES --> MEMBERS["members/"]
+    FEATURES --> MODULES["modules/"]
+    </div>
+  </div>
+</div>
+
+<!-- ==================== L2 ==================== -->
+<div id="panel-l2" class="panel">
+  <div class="section-title">🎯 Padrões de Arquitetura de Software</div>
+
+  <div class="card" style="border-color:#58a6ff44;background:#0a1a2a">
+    <h3 style="color:var(--accent)">Padrão Principal Detectado</h3>
+    <div style="font-size:24px;font-weight:700;color:var(--accent);margin:8px 0">Feature-Sliced Design (FSD)</div>
+    <p style="color:var(--muted);font-size:13px">
+      A estrutura segue FSD com camadas bem definidas: <code>features/</code> para features de produto,
+      <code>store/</code> para estado global (MobX), <code>services/</code> para acesso à API,
+      <code>core/</code> para configuração e contextos.
+    </p>
+  </div>
+
+  <details open>
+    <summary>🔎 Prova de Raciocínio — como chegamos a FSD</summary>
+    <div class="proof-body">
+      <strong>Sinais estruturais encontrados:</strong><br>
+      ✅ <code>features/</code> — camada de features do FSD (issues, cycles, members, modules, pages, dashboards)<br>
+      ✅ Separação clara entre <code>store/</code> (estado), <code>services/</code> (API) e <code>features/</code> (UI)<br>
+      ✅ <code>ce/</code> (Community Edition) encapsula a lógica de produto separada do routing em <code>app/</code><br><br>
+      <strong>Por que não Clean Architecture?</strong><br>
+      Não há <code>domain/</code>, <code>usecases/</code> ou <code>infrastructure/</code> explícitos. O FSD é mais adequado para React apps com routing baseado em arquivo.
+    </div>
+  </details>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Camadas FSD no Plane</h3>
+      <table>
+        <tr><th>Camada FSD</th><th>Pasta no Plane</th></tr>
+        <tr><td>Pages</td><td><code>app/(all)/[workspaceSlug]/</code></td></tr>
+        <tr><td>Features</td><td><code>ce/features/</code></td></tr>
+        <tr><td>Entities</td><td><code>ce/store/</code> (MobX)</td></tr>
+        <tr><td>Shared — UI</td><td><code>packages/ui/</code></td></tr>
+        <tr><td>Shared — API</td><td><code>packages/services/</code></td></tr>
+        <tr><td>Shared — Hooks</td><td><code>packages/hooks/</code></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Pattern de Estado</h3>
+      <p style="margin-bottom:10px;font-size:13px">O Plane usa <strong>MobX</strong> como store principal (não Redux):</p>
+      <div class="mermaid">
+graph LR
+    API["API (Django)"] --> SVC["services/<br/>axios calls"]
+    SVC --> STORE["store/<br/>MobX"]
+    STORE --> FEAT["features/<br/>React components"]
+    FEAT --> APP["app/<br/>Routes"]
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== L3 ==================== -->
+<div id="panel-l3" class="panel">
+  <div class="section-title">🎨 Estética & Convenções de Código</div>
+
+  <div class="card" style="border-color:#d2992244;background:#1a1200">
+    <h3 style="color:var(--warn)">⚠️ Achado Importante — snake_case no Frontend</h3>
+    <p style="font-size:13px;color:var(--text);margin-bottom:8px">
+      O Plane detectou <strong>snake_case</strong> como convenção dominante para variáveis e funções —
+      incomum para um projeto React/TypeScript. Isso ocorre porque:
+    </p>
+    <ul style="padding-left:20px;color:var(--muted);font-size:13px;line-height:2">
+      <li>O backend é <strong>Django (Python)</strong> — a API retorna campos em snake_case</li>
+      <li>Os stores MobX espelham a nomenclatura da API (<code>project_id</code>, <code>created_by</code>)</li>
+      <li>Tipos TypeScript das respostas da API usam snake_case por consistência</li>
+    </ul>
+    <p style="color:var(--muted);font-size:12px;margin-top:8px">
+      <strong>Regra de ouro:</strong> quando gerar código para o Plane, use snake_case em types que mapeiam para a API, e camelCase apenas em lógica React pura (handlers, useState).
+    </p>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Convenções de Naming</h3>
+      <table>
+        <tr><th>Contexto</th><th>Estilo</th><th>Exemplo</th></tr>
+        <tr>
+          <td>Variáveis / funções</td>
+          <td><span class="badge warn">snake_case</span></td>
+          <td><code>project_id, fetch_issues</code></td>
+        </tr>
+        <tr>
+          <td>Componentes React</td>
+          <td><span class="badge ok">PascalCase</span></td>
+          <td><code>IssueListItem, WorkspaceHeader</code></td>
+        </tr>
+        <tr>
+          <td>Classes / Stores</td>
+          <td><span class="badge ok">PascalCase</span></td>
+          <td><code>IssueStore, ProjectStore</code></td>
+        </tr>
+        <tr>
+          <td>Imports</td>
+          <td><span class="badge info">named preferred</span></td>
+          <td><code>import { useIssue } from ...</code></td>
+        </tr>
+        <tr>
+          <td>Arquivos</td>
+          <td><span class="badge">kebab-case</span></td>
+          <td><code>issue-list.tsx, use-issues.ts</code></td>
+        </tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Outras Convenções</h3>
+      <table>
+        <tr><th>Aspecto</th><th>Padrão</th></tr>
+        <tr><td>Organização de imports</td><td>React → libs externas → paths internos</td></tr>
+        <tr><td>Exports</td><td>Named exports (sem default em features)</td></tr>
+        <tr><td>Hooks</td><td><code>use&lt;Entidade&gt;</code> — co-localizados com feature</td></tr>
+        <tr><td>Testes</td><td>Nos packages (não no app web)</td></tr>
+        <tr><td>Estado assíncrono</td><td>MobX observables + actions</td></tr>
+        <tr><td>Estilos</td><td>Tailwind CSS</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Padrão de Arquivo Típico — Feature do Plane</h3>
+    <pre><code>// ce/features/issues/components/issue-list-item.tsx
+
+import React from "react";
+import { observer } from "mobx-react-lite";
+import { useIssue } from "@/hooks";
+import { IssueStore } from "@/store/issue.store";
+
+// snake_case nos tipos que vêm da API
+type TIssue = {
+  id: string;
+  project_id: string;          // ← snake_case (espelha a API Django)
+  created_by: string;
+  state_id: string;
+}
+
+// PascalCase no componente React
+export const IssueListItem = observer(({ issue_id }: { issue_id: string }) => {
+  const { issues } = useIssue();
+  return &lt;div&gt;...&lt;/div&gt;;
+});</code></pre>
+  </div>
+</div>
+
+<!-- ==================== L4 ==================== -->
+<div id="panel-l4" class="panel">
+  <div class="section-title">⚡ Coexistência de Padrões — Vigente vs Legado</div>
+
+  <div class="pattern-card vigente">
+    <div class="pattern-icon">✅</div>
+    <div>
+      <div class="pattern-label" style="color:var(--ok)">VIGENTE — Seguir este padrão</div>
+      <div class="pattern-dirs"><code>store/</code> &nbsp;·&nbsp; <code>hooks/</code> &nbsp;·&nbsp; <code>power-k/</code></div>
+      <div class="pattern-note">
+        Arquivos mais recentes concentrados nos stores MobX e hooks personalizados.
+        O <code>power-k/</code> indica um sistema de comandos (Cmd+K) sendo desenvolvido ativamente.
+        Código novo deve seguir esse padrão: MobX store → hook → componente.
+      </div>
+    </div>
+  </div>
+
+  <div class="pattern-card legado">
+    <div class="pattern-icon">⚠️</div>
+    <div>
+      <div class="pattern-label" style="color:var(--warn)">LEGADO TOLERADO — Não replicar</div>
+      <div class="pattern-dirs"><code>components/</code> &nbsp;·&nbsp; <code>core/</code> &nbsp;·&nbsp; <code>issues/</code></div>
+      <div class="pattern-note">
+        Arquivos mais antigos em <code>components/</code> usam padrões anteriores ao FSD (componentes globais sem feature-slice).
+        <code>issues/</code> standalone sugere que features foram migradas progressivamente para <code>ce/features/</code>.
+        Não criar novos arquivos em <code>components/</code> — use <code>ce/features/&lt;feature&gt;/components/</code>.
+      </div>
+    </div>
+  </div>
+
+  <details>
+    <summary>🔎 Prova de Raciocínio — como detectamos vigente vs legado</summary>
+    <div class="proof-body">
+      <strong>Método:</strong> classificação por frequência × recência de modificação dos arquivos.<br><br>
+      Os arquivos do top-terceiro mais recentemente modificados (clone com --depth 1 = todos recentes)
+      concentram-se nos diretórios <code>store/</code> e <code>hooks/</code>, indicando desenvolvimento ativo.<br><br>
+      Os diretórios <code>components/</code> e <code>core/</code> aparecem mais nos dois terços "mais antigos"
+      da distribuição (por mtime do git checkout), sugerindo que são código mais estabelecido / menos tocado.<br><br>
+      <strong>Confidence: MÉDIO</strong> — repo clonado com <code>--depth 1</code>, então todos os mtimes
+      são similares. Uma análise com histórico completo daria confidence ALTO.
+    </div>
+  </details>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Implicação Prática para Tickets</h3>
+    <table>
+      <tr><th>Tarefa</th><th>Onde criar</th><th>Por quê</th></tr>
+      <tr>
+        <td>Novo componente de UI</td>
+        <td><code>ce/features/&lt;feature&gt;/components/</code></td>
+        <td>FSD — co-localizado com a feature</td>
+      </tr>
+      <tr>
+        <td>Nova chamada de API</td>
+        <td><code>packages/services/&lt;entidade&gt;.service.ts</code></td>
+        <td>Services são compartilhados via monorepo</td>
+      </tr>
+      <tr>
+        <td>Novo estado global</td>
+        <td><code>ce/store/&lt;entidade&gt;.store.ts</code></td>
+        <td>MobX store na camada de entities do FSD</td>
+      </tr>
+      <tr>
+        <td>Novo hook</td>
+        <td><code>packages/hooks/use-&lt;entidade&gt;.ts</code></td>
+        <td>Hooks são compartilhados — padrão vigente</td>
+      </tr>
+      <tr>
+        <td>Não fazer</td>
+        <td><code>components/</code> (raiz)</td>
+        <td>Legado — migrado para features</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+</div><!-- end content -->
+
+<!-- FOOTER -->
+<div class="footer">
+  <div>🔍 <strong>Scan completo</strong> · L0 + L1 + L2 + L3 + L4</div>
+  <div>📁 <strong>2.065</strong> arquivos TypeScript</div>
+  <div>💰 Custo estimado: <strong>~$0.77 USD</strong> · ~258k tokens</div>
+  <div>📅 <strong>2026-06-01</strong> · cognitive-arch/sdk/scanner_html.py</div>
+  <div style="margin-left:auto;color:#3c4043;font-size:11px">Somente metadados — nenhum código real do cliente foi armazenado</div>
+</div>
+
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'dark', flowchart: { curve: 'basis' } });
+
+function show(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

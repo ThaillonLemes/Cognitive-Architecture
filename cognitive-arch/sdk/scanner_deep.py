@@ -179,10 +179,10 @@ def _detect_pattern_coexistence(repo: Path, area: Optional[str]) -> dict:
     old_dirs: dict[str, int] = {}
 
     for f in recent:
-        for part in f.parts[:-1]:
+        for part in f.relative_to(repo).parts[:-1]:
             recent_dirs[part] = recent_dirs.get(part, 0) + 1
     for f in old:
-        for part in f.parts[:-1]:
+        for part in f.relative_to(repo).parts[:-1]:
             old_dirs[part] = old_dirs.get(part, 0) + 1
 
     # Dirs prominent in recent but not old = vigente
