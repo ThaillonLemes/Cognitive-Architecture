@@ -19,7 +19,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: high
-    last_run: "2026-05-30T05:55Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: health-report
@@ -29,7 +29,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: high
-    last_run: "2026-05-30T14:07Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: pattern-mining
@@ -59,7 +59,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: medium
-    last_run: "2026-05-30T05:55Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: dependency-check
@@ -99,7 +99,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: high
-    last_run: "2026-05-30T05:55Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: invariant-check
@@ -109,7 +109,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: high
-    last_run: "2026-05-30T05:55Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: dashboard-refresh
@@ -119,7 +119,7 @@ tools:
     recommended_interval_days: 1
     trigger_type: time
     priority: medium
-    last_run: "2026-05-30T14:07Z"
+    last_run: "2026-06-02T00:49Z"
     mutable_by: master
 
   - id: post-pause-briefing

@@ -252,6 +252,10 @@ def run_phase_forecast(arch_root: Path) -> tuple[bool, str]:
     return _run([sys.executable, "sdk/phase_forecast.py", "--arch-root", "."], arch_root, "phase-forecast")
 
 
+def run_security_review(arch_root: Path) -> tuple[bool, str]:
+    return _run([sys.executable, "sdk/security_review.py", "--arch-root", ".", "--revalidate"], arch_root, "security-revalidation")
+
+
 # Note: proposal generation is folded into pattern-mining (run_pipeline with
 # propose=True) so the loop closes in one tracked tool — no separate
 # protocol-updater runner is needed.
@@ -265,11 +269,98 @@ TOOL_RUNNERS = {
     "invariant-check": run_invariant_check,
     "audit": run_audit_py,
     "phase-forecast": run_phase_forecast,
+    "security-revalidation": run_security_review,
 }
 
 
 _PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _MAX_GOVERNOR_DISPLAY = 10
+
+
+def _create_calendar_notifications(arch_root: Path) -> None:
+    """Create notifications for today's meetings. Best-effort, never raises.
+
+    Priority rules (Q3 from brainstorm 2026-06-01):
+        < 10 min  → critical  (soft-block territory)
+        < 60 min  → high
+        < 300 min → high  (5h threshold)
+        today     → medium
+    """
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        from calendar_manager import get_today_meetings_with_times
+        from notification_manager import Governor
+        gov = Governor(arch_root)
+        meetings = get_today_meetings_with_times(arch_root)
+        for mt in meetings:
+            if mt["is_past"]:
+                continue
+            mins = mt["minutes_remaining"]
+            if mins < 10:
+                priority = "critical"
+            elif mins < 300:  # < 5h
+                priority = "high"
+            else:
+                priority = "medium"
+            gov.add(
+                mt["alert_str"],
+                type_="block",
+                priority=priority,
+            )
+    except Exception:
+        pass  # calendar notifications never block session start
+
+
+def _create_session_notifications(
+    arch_root: Path,
+    inv_critical: int,
+    inv_warn: int,
+    health_score: Optional[int],
+) -> None:
+    """Create persistent notifications for session-critical findings.
+    Called once per session after all metrics are collected.
+    Best-effort — never raises, never blocks session start.
+
+    Thresholds (Q2 from brainstorm 2026-06-01):
+        invariant critical ≥ 1   → priority:critical
+        invariant warn     ≥ 1   → priority:high  (consolidated — 1 per type)
+        health_score < 60        → priority:critical
+        health_score < 75        → priority:high
+    """
+    try:
+        sys.path.insert(0, str(arch_root / "sdk"))
+        from notification_manager import Governor
+        gov = Governor(arch_root)
+
+        if inv_critical > 0:
+            gov.add(
+                f"{inv_critical} invariant critical violation(s) — run sdk/invariant_check.py",
+                type_="health",
+                priority="critical",
+            )
+
+        if inv_warn > 0:
+            gov.add(
+                f"{inv_warn} invariant warning(s) active — run sdk/invariant_check.py for details",
+                type_="health",
+                priority="high",
+            )
+
+        if health_score is not None:
+            if health_score < 60:
+                gov.add(
+                    f"Health score critical: {health_score}/100 — immediate attention required",
+                    type_="health",
+                    priority="critical",
+                )
+            elif health_score < 75:
+                gov.add(
+                    f"Health score degraded: {health_score}/100 — review governance/health-report-*.md",
+                    type_="health",
+                    priority="high",
+                )
+    except Exception:
+        pass  # notifications never block session start
 
 
 def _display_governor_notifications(arch_root: Path) -> None:
@@ -403,14 +494,16 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
     # Always printed (independent of whether the invariant-check tool was stale),
     # so the count is visible every session. The HALT capability lives only in
     # invariant_check.gate_result() for block-close; here we report and continue.
+    _inv_crit = 0
+    _inv_warn = 0
     try:
         sys.path.insert(0, str(arch_root / "sdk"))
         import invariant_check
         _viol = invariant_check.run_all(arch_root)
-        _crit = sum(1 for v in _viol if v.severity == "critical")
-        _warn = sum(1 for v in _viol if v.severity == "warn")
-        _tag = " [CRITICAL]" if _crit else ""
-        print(f"  [INVARIANTS] {_crit} critical, {_warn} warn{_tag} — see sdk/invariant_check.py")
+        _inv_crit = sum(1 for v in _viol if v.severity == "critical")
+        _inv_warn = sum(1 for v in _viol if v.severity == "warn")
+        _tag = " [CRITICAL]" if _inv_crit else ""
+        print(f"  [INVARIANTS] {_inv_crit} critical, {_inv_warn} warn{_tag} — see sdk/invariant_check.py")
     except Exception:
         pass  # invariant surfacing never blocks session start
 
@@ -430,6 +523,9 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
     except Exception:
         pass  # never block session start on calendar failure
 
+    # Create persistent calendar notifications (block-178)
+    _create_calendar_notifications(arch_root)
+
     # Governor notifications (Phase 21)
     _display_governor_notifications(arch_root)
 
@@ -441,18 +537,22 @@ def run_session_start(arch_root: Path, force: bool = False) -> None:
         if m and int(m.group(1)) > 0:
             print(f"  [!] Active patterns detected: {m.group(1)} — check governance/patterns.md")
 
+    _health_score: Optional[int] = None
     health_path = sorted((arch_root / "governance").glob("health-report-*.md"))
     if health_path:
         text = health_path[-1].read_text(encoding="utf-8", errors="replace")
         m = re.search(r"Score: (\d+)/100", text)
         if m:
-            score = int(m.group(1))
+            _health_score = int(m.group(1))
             try:
                 import health_model as _hm
-                tag = _hm.label_for(score)
+                tag = _hm.label_for(_health_score)
             except Exception:
-                tag = "HEALTHY" if score >= 90 else "DEGRADED" if score >= 70 else "CRITICAL"
-            print(f"  Health: {score}/100 [{tag}]")
+                tag = "HEALTHY" if _health_score >= 90 else "DEGRADED" if _health_score >= 70 else "CRITICAL"
+            print(f"  Health: {_health_score}/100 [{tag}]")
+
+    # Create persistent notifications from metrics collected above (block-177)
+    _create_session_notifications(arch_root, _inv_crit, _inv_warn, _health_score)
 
     # Phase-completion forecast (Phase 26 / block-151) — dated estimate next to
     # Health. In-process call (mirrors [INVARIANTS]) so it prints every session;

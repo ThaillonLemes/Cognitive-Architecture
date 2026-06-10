@@ -86,13 +86,19 @@ def _retro_exists(arch_root: Path, block_id: str) -> bool:
 
 
 def _manifest_tier(arch_root: Path, block_id: str) -> str | None:
-    """tier: from the block's manifest frontmatter, or None."""
+    """tier: or size: from the block's manifest frontmatter, or None.
+    Accepts v1 format (tier: S/M/L) and v2 format (size: XS/S/M/L/XL)."""
     mdir = arch_root / "manifests"
     if not mdir.exists():
         return None
     for cand in sorted(mdir.glob(f"block-{_block_num(block_id)}-*.md")):
         fm = _frontmatter(cand.read_text(encoding="utf-8", errors="ignore"))
+        # v1 format
         m = re.search(r"^tier:\s*(\S+)", fm, re.MULTILINE)
+        if m:
+            return m.group(1)
+        # v2 format (size: XS/S/M/L/XL replaces tier:)
+        m = re.search(r"^size:\s*(\S+)", fm, re.MULTILINE)
         if m:
             return m.group(1)
     return None
@@ -142,11 +148,15 @@ def check_inv3(arch_root: Path) -> list[str]:
             continue  # no duration -> INV3 not applicable
         id_m = re.search(r"^id:\s*(block-\d+)", fm, re.MULTILINE)
         block_id = id_m.group(1) if id_m else retro.stem
-        # tier resolvable from retro frontmatter OR the matching manifest
+        # tier resolvable from retro frontmatter (v1: tier:, v2: size:) OR manifest
         tier = None
         tm = re.search(r"^tier:\s*(\S+)", fm, re.MULTILINE)
         if tm:
             tier = tm.group(1)
+        if tier is None:
+            sm = re.search(r"^size:\s*(\S+)", fm, re.MULTILINE)
+            if sm:
+                tier = sm.group(1)
         if tier is None:
             tier = _manifest_tier(arch_root, block_id)
         if tier is None:

@@ -1,6 +1,6 @@
 # Protocol: Manifest Tier L generation
 
-BRIEF: How to fill `templates/manifest-large.md`. Tier L is for: phase gates, cross-repo coordination, activation ramps, large refactors. Read before generating Tier L manifest.
+BRIEF: How to fill `templates/manifest-large-v2.md`. Tier L is for: phase gates, cross-repo coordination, activation ramps, large refactors. Read before generating Tier L manifest.
 
 ## Trigger
 

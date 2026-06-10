@@ -11,6 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows cp1252 emoji-safe (port 2026-06-09)
+
 DEFAULT_PAUSE_THRESHOLD_HOURS = 24
 MAX_BRIEFING_LINES = 15  # hard cap on markdown output lines
 

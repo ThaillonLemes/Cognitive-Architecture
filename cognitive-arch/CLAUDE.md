@@ -12,6 +12,7 @@ Full phrase tables + detection markers: `protocols/trigger-phrases.md`. Auto-exe
 |-------|-------|
 | Retrofit phrase | → `RETROFIT.md` (10-step flow, Steps 0–9) |
 | Bootstrap phrase | → `BOOTSTRAP.md` (Phase 0 flow) |
+| **"brainstorm"** / "questionário" / "brainstorming" / "vamos brainstormar" | → **`protocols/brainstorm-pattern-v2.md`** (fluxo v2 obrigatório — NUNCA brainstorm livre) |
 | `oi/olá/hello/hi` + workspace empty | → `BOOTSTRAP.md` |
 | `oi/olá/hello/hi` + `STATE.md` status:active | → session init + briefing (run `sdk/session_start.py --arch-root .`, read `STATE.md` + `NEXT.md`, reporte status/fase/próxima ação) |
 | `oi/olá/hello/hi` + `STATE.md` status:bootstrap ou sem STATE.md + code detected | → ask: retrofit or new project? |

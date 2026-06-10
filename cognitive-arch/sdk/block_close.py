@@ -385,6 +385,15 @@ def close_block(
         if review_files:
             print(f"  Quality HTML: {review_files[-1].name}")
 
+    # block-179: surface notifications at block close (corporate mode only)
+    mode = meta.get("mode", read_state(arch_root).get("mode", "mmorpg"))
+    if mode == "corporate":
+        try:
+            from notification_manager import surface, TRIGGER_BLOCK_CLOSE
+            surface(TRIGGER_BLOCK_CLOSE, arch_root)
+        except Exception:
+            pass
+
     print(f"\n  [block_close] Done. Remaining AI steps: 1-gates 5-retro 7-commit 8-emit-next")
     return results
 

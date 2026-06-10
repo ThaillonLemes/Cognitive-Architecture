@@ -21,6 +21,14 @@ ARCHIVE_PATH = "governance/notifications-archive.md"
 LOG_PATH = "governance/governor-log.md"
 _LOCK_TIMEOUT = 5.0
 
+# Surfacing trigger constants (block-179)
+TRIGGER_SESSION_START  = "session_start"
+TRIGGER_PHASE_CLOSE    = "phase_close"
+TRIGGER_BLOCK_CLOSE    = "block_close"
+TRIGGER_SCAN_COMPLETE  = "scan_complete"
+
+_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
 
 # ---------------------------------------------------------------------------
 # Notification dataclass
@@ -351,10 +359,48 @@ class Governor:
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# Surfacing (block-179)
 # ---------------------------------------------------------------------------
 
-_PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+def surface(trigger: str, arch_root: Path) -> list[Notification]:
+    """Surface pending notifications at a checkpoint trigger.
+
+    Prints pending notifications to stdout sorted by priority, marks them as
+    seen, and returns the surfaced list. Always safe to call — never raises.
+
+    Trigger constants: TRIGGER_SESSION_START | TRIGGER_PHASE_CLOSE |
+                       TRIGGER_BLOCK_CLOSE   | TRIGGER_SCAN_COMPLETE
+
+    Callers are responsible for mode-gating (e.g. only call TRIGGER_BLOCK_CLOSE
+    in corporate mode).
+    """
+    try:
+        gov = Governor(arch_root)
+        items = gov.list(pending_only=True)
+        if not items:
+            return []
+        items.sort(key=lambda n: (_PRIORITY_ORDER.get(n.priority, 9), n.created_at))
+        print(f"\n  ── Notificações [{trigger}] ──────────────────────")
+        for n in items:
+            tag = n.priority.upper()
+            print(f"  [{tag}] {n.message}")
+            if n.priority == "critical" and "reunião" in n.message.lower():
+                mins = ""
+                import re as _re
+                m = _re.search(r"em (\d+)m", n.message)
+                if m:
+                    mins = f" ({m.group(1)}min restantes)"
+                print(f"  ⚠️  ATENÇÃO: reunião iminente{mins} — confirme antes de continuar")
+            gov.seen(n.id)
+        print(f"  ─────────────────────────────────────────────────\n")
+        return items
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _print_table(items: list[Notification]) -> None:

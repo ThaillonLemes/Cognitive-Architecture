@@ -513,6 +513,13 @@ def run_scan(
     except Exception:
         pass
 
+    # block-179: surface notifications at scan complete (corporate mode only)
+    try:
+        from notification_manager import surface, TRIGGER_SCAN_COMPLETE
+        surface(TRIGGER_SCAN_COMPLETE, arch_root)
+    except Exception:
+        pass
+
     return results
 
 

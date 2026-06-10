@@ -19,6 +19,10 @@ from master_scheduler import (
     _NEVER_RUN_DAYS,
 )
 
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows cp1252 emoji-safe (port 2026-06-09)
+
 _EMOJI = {
     URGENCY_CRITICAL: "🔴",
     URGENCY_VERY_OVERDUE: "🟠",

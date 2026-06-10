@@ -1,6 +1,6 @@
 # Protocol: Manifest Tier S generation
 
-BRIEF: How to fill `templates/manifest-small.md`. Tier S is for: investigation, doc-only, single-file fix, lint sweep, refactor ≤ 2 files. Read before generating Tier S manifest.
+BRIEF: How to fill `templates/manifest-small-v2.md`. Tier S is for: investigation, doc-only, single-file fix, lint sweep, refactor ≤ 2 files. Read before generating Tier S manifest.
 
 ## Trigger
 

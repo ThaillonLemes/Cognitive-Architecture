@@ -1,6 +1,6 @@
 # Protocol: Manifest Tier M generation
 
-BRIEF: How to fill `templates/manifest-medium.md`. Tier M is the DEFAULT for implementation blocks. Read before generating Tier M manifest.
+BRIEF: How to fill `templates/manifest-medium-v2.md`. Tier M is the DEFAULT for implementation blocks. Read before generating Tier M manifest.
 
 ## Trigger
 

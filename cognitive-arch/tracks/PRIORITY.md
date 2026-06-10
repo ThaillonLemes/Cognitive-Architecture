@@ -14,12 +14,12 @@ Protocol: `protocols/track-priority.md`
 
 | track_id | bottleneck_score | stagnation_count | user_priority | total_priority | current_best | last_improved_at | stagnation_alert | notes |
 |----------|-----------------|-----------------|--------------|----------------|-------------|-----------------|-----------------|-------|
-| track/bloco-fase | 8 | 0 | 10 | 44 | ~80% completude (estimado) | ~ | — | **SESSÃO PRINCIPAL — não trabalhar autonomamente** |
-| track/fundacao-corporativa | 8 | 0 | 7 | 38 | 0% (não implementado) | ~ | — | Fase 29 — em design |
-| track/orquestracao-paralelismo | 7 | 0 | 8 | 37 | 100% mock / SDK: desconhecido | ~ | — | **CURRENT FOCUS do agente paralelo** |
-| track/confiabilidade-notificacoes | 7 | 0 | 8 | 37 | Health: 80/100 DEGRADED | ~ | — | 29 invariant warnings ativos |
 | track/forecast-pilotagem | 5 | 0 | 6 | 27 | ~72% accuracy (estimado) | ~ | — | Reorientar para tickets corporativos |
 | track/ux-dial-abstracao | 5 | 0 | 6 | 27 | não medido (dial não existe) | ~ | — | Dial global planejado para Fase 29+ |
+| track/confiabilidade-notificacoes | 4 | 0 | 8 | 28 | Pipeline done (blocks 176-179); 29 v1 warns + audit 72/100 restantes | 2026-06-01 | — | Delivery done; dívida v1 e audit score pendentes |
+| track/bloco-fase | 2 | 0 | 10 | 26 | Redesign done: templates v2 + dual-mode SDK (blocks 162-165) | 2026-06-01 | — | Validar benchmark 95% completude na prática |
+| track/orquestracao-paralelismo | 3 | 0 | 8 | 25 | SDK: retry+backoff+log (hipóteses 1-4 done) | 2026-06-01 | — | Pendente: medir taxa real SDK em produção |
+| track/fundacao-corporativa | 2 | 0 | 7 | 20 | 100% (Fase 29 complete — blocks 162-165) | 2026-06-01 | — | Fundação construída; hipóteses 3-4 (marca expansão, boot mode) opcionais |
 | track/motor-brainstorm | 4 | 0 | 5 | 22 | ~70% aceitação (estimado) | ~ | — | Já em uso ativo |
 | track/auto-reparo-propostas | 4 | 0 | 5 | 22 | não medido | ~ | — | Guards implementados (fase 27) |
 | track/mineracao-padroes | 4 | 0 | 5 | 22 | 3 padrões ativos sem resolução | ~ | — | Ver governance/patterns.md |
@@ -28,17 +28,17 @@ Protocol: `protocols/track-priority.md`
 | track/briefing-pos-pausa | 2 | 0 | 3 | 12 | gap 14.7h coberto | ~ | — | Funciona; threshold 24h |
 | track/dashboard-relatorios | 2 | 0 | 3 | 12 | skipped em 2026-05-31 | ~ | — | Investigar por que foi skipped |
 | track/token-tracker | 1 | 0 | 3 | 9 | tok_src:estimated maioria | ~ | — | Token não é gargalo no corporativo |
-| track/scanner-dossie | 1 | 0 | 2 | 7 | N/A — não construído | ~ | — | **Fase 30 — eventualmente** |
-| track/pipeline-qualidade | 1 | 0 | 2 | 7 | N/A — não construído | ~ | — | **Fase 31 — eventualmente** |
+| track/scanner-dossie | 1 | 0 | 2 | 7 | built (Fase 30 — blocks 166-169) | 2026-06-01 | — | Fase 30 — complete |
+| track/pipeline-qualidade | 1 | 0 | 2 | 7 | built (Fase 31 — blocks 170-172) | 2026-06-01 | — | Fase 31 — complete |
 
 ---
 
 ## current_focus
 
 ```
-current_focus: track/orquestracao-paralelismo
-reason: highest actionable total_priority (37) — track/bloco-fase (44) reservado para sessão principal com Piloto
-agent: tracker (agente paralelo, wip desde 2026-05-31)
+current_focus: track/forecast-pilotagem
+reason: bloco-fase e fundacao-corporativa reescores (done); confiabilidade-notificacoes pipeline done; próximo actionable não-done = 27
+agent: tracker
 ```
 
 ---
@@ -59,6 +59,14 @@ Tracks onde `stagnation_count ≥ 3` aparecem aqui. The Governor includes these 
 |------|-------|----------|--------------|-----------|-----------|
 | 2026-05-31 | track_created | ALL (16 tracks) | — | none | 16 tracks created by agent:tracker |
 | 2026-05-31 | current_focus_set | track/orquestracao-paralelismo | current_focus | none | track/orquestracao-paralelismo |
+| 2026-06-01 | improved | track/orquestracao-paralelismo | current_best | SDK:desconhecido | SDK:retry+backoff+log (hipóteses 1-4) |
+| 2026-06-01 | improved | track/fundacao-corporativa | current_best | 0% (não implementado) | 100% (Fase 29 complete) |
+| 2026-06-01 | improved | track/bloco-fase | current_best | ~80% estimado | templates v2 (block-162) |
+| 2026-06-01 | improved | track/scanner-dossie | current_best | N/A | built (Fase 30) |
+| 2026-06-01 | improved | track/pipeline-qualidade | current_best | N/A | built (Fase 31) |
+| 2026-06-01 | current_focus_set | track/confiabilidade-notificacoes | current_focus | track/orquestracao-paralelismo | track/confiabilidade-notificacoes |
+| 2026-06-01 | improved | track/confiabilidade-notificacoes | current_best | Health:80 sem delivery | pipeline completo (blocks 176-179) |
+| 2026-06-01 | current_focus_set | track/forecast-pilotagem | current_focus | track/confiabilidade-notificacoes | track/forecast-pilotagem |
 
 ---
 

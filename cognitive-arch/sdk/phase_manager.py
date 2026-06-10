@@ -349,6 +349,13 @@ def close_phase(root: Path, phase_id: str, agent: str = "implementer") -> None:
     except Exception:
         pass
 
+    # block-179: surface notifications at phase close (all modes)
+    try:
+        from notification_manager import surface, TRIGGER_PHASE_CLOSE
+        surface(TRIGGER_PHASE_CLOSE, root)
+    except Exception:
+        pass
+
     print(f"\n  [phase_manager] {phase_id} closed. Fill in retro scaffold at blocks/{phase_id}-retrospective.md")
 
 

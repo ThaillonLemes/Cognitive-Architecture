@@ -1,6 +1,6 @@
 # Protocol: Block retrospective generation
 
-BRIEF: How to fill `templates/block-retrospective.md`. Written at block close. Facts only — no narrative.
+BRIEF: How to fill `templates/block-retrospective-v2.md`. Written at block close. Facts only — no narrative.
 
 ## Trigger
 

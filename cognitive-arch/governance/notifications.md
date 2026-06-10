@@ -27,5 +27,15 @@
 #   block     — block-level events (gate failures, overruns)
 #   custom    — manually created via sdk/governor.py --notify
 
-notifications: []
+
+notifications:
+- id: health-2026-06-01-001
+  type: health
+  message: 29 invariant warning(s) active — run sdk/invariant_check.py for details
+  priority: high
+  status: pending
+  source: manual
+  created_at: 2026-06-01
+  seen_at: ~
+  dismissed_at: ~
 ---

@@ -16,3 +16,4 @@
 # approved_by: thailloncp (user)
 # action: python sdk/integrity_check.py --regenerate --arch-root .
 # --- END INTEGRITY BUMP ---
+2026-06-02T00:49Z add health-2026-06-01-001 manual

@@ -197,6 +197,61 @@ def get_today_alerts(arch_root: Path) -> list[str]:
     return alerts
 
 
+def get_today_meetings_with_times(arch_root: Path) -> list[dict]:
+    """Return structured info for today's meetings.
+
+    Each dict has:
+        desc             str   — meeting description
+        time             str   — HH:MM
+        minutes_remaining int  — minutes until start (negative if past/ongoing)
+        is_past          bool  — True if meeting start has passed
+        alert_str        str   — human-readable alert string
+    """
+    meetings = _read_calendar(arch_root)
+    expanded = expand_recurring(meetings)
+    today_str = date.today().isoformat()
+    now = datetime.now(timezone.utc)
+    result: list[dict] = []
+
+    for m in expanded:
+        if m.date != today_str:
+            continue
+        try:
+            hour, minute = map(int, m.time.split(":"))
+            meeting_dt = datetime.now(timezone.utc).replace(
+                hour=hour, minute=minute, second=0, microsecond=0
+            )
+            diff = meeting_dt - now
+            minutes_remaining = int(diff.total_seconds() / 60)
+            is_past = diff.total_seconds() <= 0
+
+            if not is_past:
+                h = abs(minutes_remaining) // 60
+                mins = abs(minutes_remaining) % 60
+                time_str = f"{h}h{mins:02d}m" if h > 0 else f"{mins}m"
+                alert_str = f"Reunião em {time_str} — {m.desc} às {m.time}"
+            else:
+                alert_str = f"Reunião hoje às {m.time} — {m.desc} (passou ou em curso)"
+
+            result.append({
+                "desc": m.desc,
+                "time": m.time,
+                "minutes_remaining": minutes_remaining,
+                "is_past": is_past,
+                "alert_str": alert_str,
+            })
+        except ValueError:
+            result.append({
+                "desc": m.desc,
+                "time": m.time,
+                "minutes_remaining": 999,
+                "is_past": False,
+                "alert_str": f"Reunião hoje às {m.time} — {m.desc}",
+            })
+
+    return result
+
+
 def get_upcoming_alerts(arch_root: Path, days: int = 3) -> list[str]:
     """Return upcoming meeting alerts for the next N days (excluding today)."""
     meetings = _read_calendar(arch_root)

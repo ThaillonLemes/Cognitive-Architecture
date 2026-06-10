@@ -1,15 +1,20 @@
-# PURPOSE: Forecast when the CURRENT phase will finish, from remaining blocks x measured
-#          velocity. The `phase-forecast` registry entry pointed here for ages but the
-#          script never existed -- the math lived inline in health_report._section_phase_progress.
-#          This is the single source now: health_report + session_start both call forecast().
-# INPUTS:  arch-root directory -> STATE.md (current phase, via project_state), the current
-#          phase-N.md block table (remaining blocks), and completed retros (measured velocity).
-# OUTPUTS: Forecast(remaining_blocks, est_days, confidence['MEASURED'|'ESTIMATED'],
-#          completion_estimate). CLI prints a dated completion estimate + the label. ASCII-safe.
-# DEPS:    stdlib only (re, math, argparse, datetime, statistics) + project_state,
-#          velocity_inference, safe_io. NEVER imports health_report (would cycle).
-# SEE:     phases/phase-26.md sec.2 (phase-completion forecast), manifests/block-151-phase-forecast.md,
-#          sdk/velocity_inference.py (MEASURED/ESTIMATED discipline, block-138), sdk/project_state.py
+# PURPOSE: Forecast remaining time in the current phase from velocity + open blocks.
+# INPUTS:  arch-root, phases/phase-*.md, blocks/BLOCK_LOG.md, blocks/*.md retros
+# OUTPUTS: governance/phase-forecast-YYYY-MM-DD.md
+# DEPS:    stdlib only (argparse, datetime, math, re, pathlib, statistics)
+# SEE:     commands/phase-forecast.md, sdk/health_report.py (_section_phase_progress)
+
+"""
+Phase Forecast for cognitive-arch projects.
+
+Estimates remaining time in the current (highest-numbered) phase based on
+historical block velocity and the count of open blocks in that phase. The
+estimate is velocity-based and refreshes on every run.
+
+Usage:
+  python sdk/phase_forecast.py --arch-root .
+  python sdk/phase_forecast.py --arch-root . --dry-run
+"""
 
 from __future__ import annotations
 
@@ -17,266 +22,190 @@ import argparse
 import math
 import re
 import sys
-from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from statistics import mean
-from typing import Optional
 
-# Ensure sibling modules importable when run as a script (python sdk/phase_forecast.py).
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows cp1252-safe output
 
-import project_state
-import velocity_inference
-from safe_io import force_utf8
+_VELOCITY_DEFAULTS = {"S": 1.0, "M": 3.5, "L": 9.0}
+WORK_HOURS_PER_DAY = 4
 
 
-# Tier-mean fallbacks when a tier has no measured retro samples. Mirrors
-# health_report._VELOCITY_DEFAULTS so the shared forecast reads the same hours
-# whichever caller drives it.
-VELOCITY_DEFAULTS = {"S": 1.0, "M": 3.5, "L": 9.0}
-# block-173/174: velocity_inference.infer_duration now returns source='actual' when
-# actual_duration_hours is stamped by velocity_tracker — this file benefits automatically
-# because _measure_tier_hours calls infer_duration which reads actual_duration_hours first.
-
-# block-138 discipline: a tier mean is MEASURED only with >= this many real
-# samples; below it the number is an ESTIMATE and must be labelled as such.
-MEASURED_MIN_SAMPLES = 3
-
-# Hours of focused block work assumed per calendar day (the inline math used /4).
-HOURS_PER_DAY = 4
-
-
-@dataclass
-class Forecast:
-    """A phase-completion projection plus the confidence it is allowed to claim.
-
-    `remaining_blocks` is how many blocks of the current phase are not yet done.
-    `est_days` is the projected calendar days to finish them (None only when there
-    is nothing to forecast -- e.g. no phase file). `confidence` is the block-138
-    label: 'MEASURED' when the velocity used rests on >= MEASURED_MIN_SAMPLES real
-    retro samples, else 'ESTIMATED' (thin history must never be dressed as certain).
-    `completion_estimate` is the ISO date the phase is projected to close (or a
-    short reason string like 'phase complete' / 'unknown' when no date applies).
-    """
-
-    remaining_blocks: int
-    est_days: Optional[float]
-    confidence: str            # 'MEASURED' | 'ESTIMATED'
-    completion_estimate: str   # ISO date 'YYYY-MM-DD', or a reason when no date
-
-
-# ---------------------------------------------------------------------------
-# Shared building blocks (used by forecast() AND health_report's section)
-# ---------------------------------------------------------------------------
-
-def phase_block_counts(arch_root_or_file: Path) -> tuple[int, int]:
-    """(done_count, total_count) of blocks in the CURRENT phase's block table.
-
-    Accepts either an arch-root directory (reads the current phase file via
-    project_state) or a direct phase file path (reads that file). Reads only
-    genuine block-index table rows (anchored to line start) so block IDs
-    mentioned in prose cells (e.g. Risks table) are not over-counted.
-    Defensive: any failure -> (0, 0).
-    """
+def _read(arch_root: Path, rel: str, default: str = "") -> str:
+    p = arch_root / rel
+    if not p.exists():
+        return default
     try:
-        arch_root_or_file = Path(arch_root_or_file)
-        if arch_root_or_file.is_file():
-            # Called with a direct phase file path (e.g. from tests or CLI verify).
-            phase_file = arch_root_or_file
-        else:
-            phase_file = project_state.current_phase_file(arch_root_or_file)
-        if phase_file is None or not phase_file.exists():
-            return 0, 0
-        content = phase_file.read_text(encoding="utf-8")
-    except Exception:
-        return 0, 0
-
-    # Count only genuine block-index rows (anchored to line start to avoid
-    # matching block IDs mentioned in prose cells like the Risks table).
-    block_rows = re.findall(r"(?m)^\s*\|\s*(block-\d+)\s*\|", content)
-    total_count = len(block_rows)
-    # Count done rows: lines matching block-row pattern that also contain '| done |'
-    done_count = sum(
-        1 for row_line in re.findall(r"(?m)^\s*\|[^\n]+\|", content)
-        if re.search(r"\bblock-\d+\b", row_line, re.IGNORECASE)
-        and re.search(r"\|\s*done\s*\|", row_line, re.IGNORECASE)
-    )
-    if total_count == 0:
-        m = re.search(r"(\d+)\s+blocks?", content, re.IGNORECASE)
-        if m:
-            total_count = int(m.group(1))
-    return done_count, total_count
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return default
 
 
-def measured_velocity(arch_root: Path) -> tuple[dict, dict]:
-    """Per-tier mean active hours from completed retros, plus per-tier sample counts.
-
-    Returns (means, counts) where means[T] is the mean measured duration for tier T
-    (or VELOCITY_DEFAULTS[T] when no samples) and counts[T] is how many real samples
-    backed it. Tier source priority mirrors health_report._collect_velocity_data:
-    retro frontmatter `tier:` then a manifest-tier fallback (the 086-111 cohort omit
-    `tier:` in their retros). Reuses velocity_inference helpers; never raises.
-    """
-    by_tier: dict[str, list[float]] = {"S": [], "M": [], "L": []}
-    try:
-        done_ids = project_state.completed_block_ids(arch_root)
-        blocks_dir = arch_root / "blocks"
-        if blocks_dir.exists():
-            for block_id in done_ids:
-                candidates = list(blocks_dir.glob(f"{block_id}-*.md")) or \
-                    list(blocks_dir.glob(f"{block_id}.md"))
-                if not candidates:
-                    continue
-                try:
-                    content = candidates[0].read_text(encoding="utf-8")
-                except OSError:
-                    continue
-                fm = _retro_frontmatter(content)
-                try:
-                    duration = float(fm.get("actual_duration_hours", "0"))
-                except (ValueError, TypeError):
-                    continue
-                if duration <= 0:
-                    continue
-                tier = fm.get("tier", "").upper()
-                if tier not in by_tier:
-                    mp = velocity_inference._locate_manifest(block_id, arch_root)
-                    if mp is None:
-                        continue
-                    tier = velocity_inference._tier_from_manifest(mp)
-                    if tier not in by_tier:
-                        continue
-                by_tier[tier].append(duration)
-    except Exception:
-        # Defensive: a malformed arch yields no samples, never a crash.
-        by_tier = {"S": [], "M": [], "L": []}
-
-    means: dict = {}
-    counts: dict = {}
-    for tier in ("S", "M", "L"):
-        data = by_tier[tier]
-        counts[tier] = len(data)
-        means[tier] = round(mean(data), 1) if data else VELOCITY_DEFAULTS[tier]
-    return means, counts
+def _parse_block_log(arch_root: Path) -> list[str]:
+    """Return done block IDs from BLOCK_LOG.md ('<id> done ...' lines)."""
+    done = []
+    for line in _read(arch_root, "blocks/BLOCK_LOG.md").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == "done":
+            done.append(parts[0])
+    return done
 
 
-def _retro_frontmatter(content: str) -> dict:
-    """key:value pairs from a retro's YAML frontmatter (same parse as health_report)."""
+def _parse_frontmatter(content: str) -> dict:
     result: dict = {}
     in_fm = False
     for line in content.splitlines():
-        stripped = line.strip()
-        if stripped == "---":
+        s = line.strip()
+        if s == "---":
             if not in_fm:
                 in_fm = True
                 continue
             break
-        if in_fm and ":" in stripped:
-            key, _, val = stripped.partition(":")
-            result[key.strip()] = val.strip().strip("\"'#").strip()
+        if in_fm and ":" in s:
+            k, _, v = s.partition(":")
+            result[k.strip()] = v.strip().strip("\"'#").strip()
     return result
 
 
-def _per_block_hours(velocity_means: dict) -> float:
-    """Hours to budget per remaining (unknown-tier) block.
+def _velocity_by_tier(arch_root: Path, done_ids: list[str]) -> dict:
+    """Mean actual_duration_hours per tier from done-block retros (+ sample size)."""
+    by_tier: dict[str, list[float]] = {"S": [], "M": [], "L": []}
+    blocks_dir = arch_root / "blocks"
+    if blocks_dir.exists():
+        for bid in done_ids:
+            cands = list(blocks_dir.glob(f"{bid}-*.md")) or list(blocks_dir.glob(f"{bid}.md"))
+            if not cands:
+                continue
+            try:
+                fm = _parse_frontmatter(cands[0].read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            tier = fm.get("tier", "").upper()
+            if tier not in by_tier:
+                continue
+            try:
+                dur = float(fm.get("actual_duration_hours", "0"))
+            except (ValueError, TypeError):
+                continue
+            if dur > 0:
+                by_tier[tier].append(dur)
+    means = {t: (round(mean(by_tier[t]), 2) if by_tier[t] else _VELOCITY_DEFAULTS[t])
+             for t in ("S", "M", "L")}
+    return {"means": means, "sample": sum(len(v) for v in by_tier.values())}
 
-    The inline forecast treated every remaining block as tier S (the conservative,
-    smallest unit); kept identical here so health_report's number is unchanged.
-    """
-    return velocity_means.get("S", VELOCITY_DEFAULTS["S"])
 
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def forecast(arch_root, velocity_means: Optional[dict] = None) -> Forecast:
-    """Project the current phase's completion date from remaining blocks x velocity.
-
-    The ONE definition of the phase-completion forecast: health_report's Phase
-    Progress section and session_start's `Forecast:` line both call this. When
-    `velocity_means` is supplied (health_report passes the exact means it already
-    rendered), it is used as-is so the report's velocity table and its forecast can
-    never drift; otherwise velocity is measured here from completed retros.
-
-    Confidence is the block-138 label: MEASURED when the S-tier mean (the per-block
-    unit the projection multiplies) rests on >= MEASURED_MIN_SAMPLES real samples,
-    else ESTIMATED -- thin history is never presented as a hard date.
-
-    NEVER raises (Phase 26 sec.3): any failure degrades to a conservative
-    ESTIMATED Forecast with completion 'unknown'.
-    """
+def _current_phase(arch_root: Path):
+    phases_dir = arch_root / "phases"
+    if not phases_dir.exists():
+        return None, ""
+    files = sorted(
+        phases_dir.glob("phase-[0-9]*.md"),
+        key=lambda p: int(re.search(r"phase-(\d+)", p.stem).group(1)),
+    )
+    if not files:
+        return None, ""
+    f = files[-1]
     try:
-        arch_root = Path(arch_root)
-    except Exception:
-        return Forecast(0, None, "ESTIMATED", "unknown")
+        return f.stem, f.read_text(encoding="utf-8")
+    except OSError:
+        return f.stem, ""
 
-    try:
-        done_count, total_count = phase_block_counts(arch_root)
-        remaining = max(0, total_count - done_count)
 
-        # Velocity: caller-supplied (health_report) wins; else measure here.
-        if velocity_means is not None:
-            means = velocity_means
-            # We don't know the sample backing of a supplied dict -> measure the
-            # S-tier count separately so the confidence label is honest.
-            _, counts = measured_velocity(arch_root)
+def _block_counts(phase_content: str):
+    done = len(re.findall(r"\|\s*done\s*\|", phase_content, re.IGNORECASE))
+    refs = len(re.findall(r"block-\d+", phase_content, re.IGNORECASE))
+    total = max(done, refs)
+    if total == 0:
+        m = re.search(r"(\d+)\s+blocks?", phase_content, re.IGNORECASE)
+        if m:
+            total = int(m.group(1))
+    return done, total
+
+
+def forecast(arch_root: Path) -> str:
+    today = date.today().isoformat()
+    done_ids = _parse_block_log(arch_root)
+    vel = _velocity_by_tier(arch_root, done_ids)
+    means = vel["means"]
+    phase_name, phase_content = _current_phase(arch_root)
+
+    if phase_name is None:
+        body = "No phases/ directory or phase files found — cannot forecast."
+    else:
+        done, total = _block_counts(phase_content)
+        remaining = max(0, total - done)
+        pct = round(done / total * 100) if total else 0
+        # Unknown-tier remaining blocks are costed at the median (M) velocity.
+        remaining_hours = remaining * means["M"]
+        est_days = math.ceil(remaining_hours / WORK_HOURS_PER_DAY) if remaining_hours else 0
+        eta = (date.today() + timedelta(days=est_days)).isoformat() if remaining else today
+        if vel["sample"] >= 10:
+            confidence = "HIGH"
+        elif vel["sample"] >= 3:
+            confidence = "MEDIUM"
         else:
-            means, counts = measured_velocity(arch_root)
+            confidence = "LOW (insufficient velocity data — using tier defaults)"
+        body = (
+            f"- Current phase: **{phase_name}**\n"
+            f"- Blocks complete: {done}/{total} ({pct}%)\n"
+            f"- Remaining blocks: {remaining}\n"
+            f"- Velocity mean h/block: S={means['S']} M={means['M']} L={means['L']} "
+            f"(sample={vel['sample']})\n"
+            f"- Est. remaining effort: {remaining_hours:.1f}h "
+            f"(~{est_days} working day(s) @ {WORK_HOURS_PER_DAY}h/day)\n"
+            f"- **Estimated completion: {eta}** (confidence: {confidence})"
+        )
 
-        s_samples = counts.get("S", 0)
-        confidence = "MEASURED" if s_samples >= MEASURED_MIN_SAMPLES else "ESTIMATED"
+    return f"""# Phase Forecast — {today}
 
-        if total_count == 0:
-            # No phase block table to read -> nothing to forecast.
-            return Forecast(remaining, None, confidence, "unknown")
-        if remaining == 0:
-            return Forecast(0, 0.0, confidence, "phase complete")
+Generated by: sdk/phase_forecast.py
+Architecture root: {arch_root.resolve()}
 
-        remaining_hours = remaining * _per_block_hours(means)
-        est_days = math.ceil(remaining_hours / HOURS_PER_DAY)
-        today = datetime.now(timezone.utc).date()
-        completion = (today + timedelta(days=est_days)).isoformat()
-        return Forecast(remaining, float(est_days), confidence, completion)
-    except Exception:
-        # Belt-and-braces: the forecast must never abort a session or a report.
-        return Forecast(0, None, "ESTIMATED", "unknown")
+{body}
 
+*Velocity-based estimate; refreshes each run. "Unknown" remaining blocks are
+costed at the median (M) tier velocity. Generated {datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}.*
+"""
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    p = argparse.ArgumentParser(
         prog="phase_forecast",
-        description="Forecast the current phase's completion date from velocity + open blocks.",
+        description="Forecast remaining time in the current phase from velocity + open blocks.",
     )
-    parser.add_argument(
-        "--arch-root",
-        metavar="PATH",
-        default=".",
-        help="Path to the cognitive-arch root directory (default: current directory).",
-    )
-    return parser
+    p.add_argument("--arch-root", metavar="PATH", default=".",
+                   help="Path to the cognitive-arch root (default: current directory).")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Validate inputs are readable and output is writable. No file written.")
+    p.add_argument("--output-dir", metavar="PATH", default="governance",
+                   help="Directory to write the forecast to (default: governance/).")
+    return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
-    force_utf8()
-    args = build_parser().parse_args(argv)
+def main() -> None:
+    args = build_parser().parse_args()
     arch_root = Path(args.arch_root).resolve()
-
-    fc = forecast(arch_root)
-    phase = project_state.current_phase_name(arch_root)
-
-    print(f"Phase forecast for {phase}:")
-    print(f"  Remaining blocks: {fc.remaining_blocks}")
-    if fc.est_days is not None:
-        print(f"  Estimated days:   {fc.est_days:g}")
-    print(f"  Completion:       {fc.completion_estimate} [{fc.confidence}]")
-    return 0  # forecaster is advisory: ALWAYS exit 0
+    if not arch_root.exists():
+        print(f"ERROR: arch-root not found: {arch_root}", file=sys.stderr)
+        sys.exit(1)
+    out_dir = arch_root / args.output_dir
+    if args.dry_run:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            print(f"ERROR: cannot create output dir {out_dir}: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print("Phase forecast dry-run passed.")
+        sys.exit(0)
+    report = forecast(arch_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"phase-forecast-{date.today().isoformat()}.md"
+    out_path.write_text(report, encoding="utf-8")
+    print(f"Phase forecast written to: {out_path}")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

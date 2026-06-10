@@ -36,6 +36,41 @@ If the user's message contains ANY phrase below, AUTO-EXECUTE the retrofit flow 
 | "oi", "olá", "hello", "hi" with WORKSPACE EMPTY (only cognitive-arch/ exists) | Treat as bootstrap. Read BOOTSTRAP.md. |
 | "oi", "olá", "hello", "hi" with EXISTING CODE detected | Ask: "Vejo que tem código no projeto. Está adicionando a arquitetura cognitiva a um projeto existente, ou começando do zero?" Based on response, route to RETROFIT.md or BOOTSTRAP.md. |
 
+## Brainstorm / Questionnaire triggers
+
+If the user's message contains ANY phrase below (or the word "brainstorm" alone),
+AUTO-EXECUTE the brainstorm v2 flow WITHOUT asking for confirmation.
+
+| Trigger phrase (Portuguese) | Trigger phrase (English) |
+|------------------------------|--------------------------|
+| "brainstorm" (palavra isolada ou composta) | "brainstorm" |
+| "fazer um brainstorm" | "do a brainstorm" |
+| "vamos brainstormar" | "let's brainstorm" |
+| "brainstorming" | "brainstorming" |
+| "questionário" (sobre tema) | "questionnaire" |
+| "motor de brainstorm" | "brainstorm engine" |
+| "quero um brainstorm" | "I want a brainstorm" |
+| "me faz um brainstorm" | "make me a brainstorm" |
+| "brainstorm de [tema]" | "brainstorm about [topic]" |
+
+**Action — executar obrigatoriamente, na ordem:**
+
+1. Ler `protocols/brainstorm-pattern-v2.md` (protocolo completo v2).
+2. Identificar o TOPIC a partir da mensagem do usuário (ex: "game design → sistemas de combate").
+3. Carregar contexto: rodar `sdk/brainstorm_context.py` ou ler manualmente retros relevantes, padrões ativos (governance/patterns.md), ADRs relacionados, STATE.md fase atual.
+4. Gerar as perguntas adequadas ao tópico (quantidade variável, regra P2).
+5. Para cada pergunta: gerar recomendação + banda de confiança (🟢/🟡/🔴) + rationale com evidência.
+6. Preencher o template `templates/brainstorm-v2-questionnaire.md` com as predições e salvar em `_brainstorm/<topic>-v2-questionnaire.md`.
+7. Apresentar o questionário preenchido ao usuário para resposta.
+8. Após respostas: executar síntese via `sdk/brainstorm_synthesis.py` → salvar em `design/<topic>.md`.
+
+Anunciar: *"Detectado: brainstorm request. Lendo protocols/brainstorm-pattern-v2.md e iniciando fluxo v2."*
+
+**NUNCA** fazer brainstorm em formato livre (lista de bullet points ad hoc).
+**SEMPRE** usar o template v2 com recomendações, confiança e campo de resposta aberta.
+
+---
+
 ## How to detect existing code (quick check)
 
 Glob in project root for any of these markers:

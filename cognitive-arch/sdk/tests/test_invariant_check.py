@@ -45,6 +45,23 @@ def _manifest(block_id: str, *, tier: str = "M") -> str:
     return f"---\nid: {block_id}\ntier: {tier}\n---\n\n# {block_id} manifest\n"
 
 
+def _retro_v2(block_id: str, *, size: str | None = "S", hours: float | None = 2.0) -> str:
+    """v2 retro format: uses size: + importance: instead of tier:."""
+    lines = ["---", f"id: {block_id}", "status: done"]
+    if size is not None:
+        lines.append(f"size: {size}")
+        lines.append("importance: normal")
+    if hours is not None:
+        lines.append(f"actual_duration_hours: {hours}")
+    lines += ["---", "", f"# {block_id} retro", ""]
+    return "\n".join(lines)
+
+
+def _manifest_v2(block_id: str, *, size: str = "S") -> str:
+    """v2 manifest format: uses size: + importance: instead of tier:."""
+    return f"---\nid: {block_id}\nsize: {size}\nimportance: normal\n---\n\n# {block_id} manifest\n"
+
+
 def healthy_arch(tmp_path: Path) -> Path:
     """A small but fully-consistent arch root: 2 done blocks, both with retros,
     a complete lock, consistent STATE/NEXT, one proposal indexed both ways."""
@@ -201,6 +218,34 @@ class TestINV3:
         log.write_text(log.read_text(encoding="utf-8") + "block-003 done - 2026-05-22\n", encoding="utf-8")
         _write(root / "blocks" / "block-003-gamma.md", _retro("block-003", tier=None, hours=None))
         assert ic.check_inv3(root) == []
+
+    # --- v2 format (size: + importance: instead of tier:) ---
+
+    def test_clean_when_size_in_retro_v2(self, tmp_path):
+        """INV3 must NOT fire when retro uses v2 format (size:) instead of tier:."""
+        root = healthy_arch(tmp_path)
+        log = root / "blocks" / "BLOCK_LOG.md"
+        log.write_text(log.read_text(encoding="utf-8") + "block-003 done - 2026-06-01\n", encoding="utf-8")
+        _write(root / "blocks" / "block-003-gamma.md", _retro_v2("block-003", size="S", hours=1.5))
+        assert ic.check_inv3(root) == []
+
+    def test_clean_when_size_from_manifest_v2(self, tmp_path):
+        """INV3 must NOT fire when retro has no tier/size but manifest has size: (v2)."""
+        root = healthy_arch(tmp_path)
+        log = root / "blocks" / "BLOCK_LOG.md"
+        log.write_text(log.read_text(encoding="utf-8") + "block-003 done - 2026-06-01\n", encoding="utf-8")
+        _write(root / "blocks" / "block-003-gamma.md", _retro_v2("block-003", size=None, hours=1.5))
+        _write(root / "manifests" / "block-003-gamma.md", _manifest_v2("block-003", size="M"))
+        assert ic.check_inv3(root) == []
+
+    def test_fires_when_neither_tier_nor_size(self, tmp_path):
+        """INV3 must still fire when retro has duration but neither tier: nor size:."""
+        root = healthy_arch(tmp_path)
+        log = root / "blocks" / "BLOCK_LOG.md"
+        log.write_text(log.read_text(encoding="utf-8") + "block-003 done - 2026-06-01\n", encoding="utf-8")
+        _write(root / "blocks" / "block-003-gamma.md", _retro_v2("block-003", size=None, hours=2.0))
+        msgs = ic.check_inv3(root)
+        assert any("block-003" in m for m in msgs)
 
 
 # ---------------------------------------------------------------------------
