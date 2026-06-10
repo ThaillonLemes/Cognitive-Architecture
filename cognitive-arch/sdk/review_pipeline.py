@@ -277,6 +277,20 @@ def run_quality_review(
         diff_text = diff_path.read_text(encoding="utf-8", errors="replace")
     complexity = _analyze_complexity(diff_text)
 
+    # Code review (Bugbot) step — block-180
+    cr_result = None
+    _cr_mod = None
+    try:
+        cr_path = arch_root / "sdk" / "code_review.py"
+        if cr_path.exists():
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("code_review", cr_path)
+            _cr_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(_cr_mod)
+            cr_result = _cr_mod.review_block(block_id, arch_root, diff_text=diff_text)
+    except Exception:
+        pass
+
     report = QualityReport(
         block_id=block_id,
         consistency_score=con_score,
@@ -298,6 +312,16 @@ def run_quality_review(
 
     if html_enabled:
         html_content = _build_quality_html(report, ts, threshold)
+        # Inject code review section before footer
+        if cr_result is not None and _cr_mod is not None:
+            try:
+                cr_html = _cr_mod.build_html_section(cr_result)
+                html_content = html_content.replace(
+                    '<div class="footer">',
+                    cr_html + '\n<div class="footer">',
+                )
+            except Exception:
+                pass
         html_path = arch_root / "governance" / f"review-{block_id}-{ts}.html"
         html_path.parent.mkdir(exist_ok=True)
         html_path.write_text(html_content, encoding="utf-8")

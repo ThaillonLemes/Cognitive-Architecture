@@ -119,6 +119,37 @@ def _check_wip_stage_corporate(arch_root: Path, block_id: str, phase_id: str) ->
     return True, ""
 
 
+def _check_code_review_gate(
+    arch_root: Path, block_id: str, phase_id: str, force: bool = False
+) -> tuple[bool, str]:
+    """Run code review (Bugbot) gate. Returns (ok, message).
+
+    Normal mode  : blocks on security/bug findings; quality findings → logged, pass.
+    Corporate mode: blocks on any finding.
+    force=True   : always passes (findings still logged to bugs.md).
+    """
+    cr_path = arch_root / "sdk" / "code_review.py"
+    if not cr_path.exists():
+        return True, "INFO: code_review.py not found — gate skipped"
+
+    mode = _read_phase_mode(arch_root, phase_id)
+
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("code_review", cr_path)
+        cr_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cr_mod)
+        result = cr_mod.review_block(block_id, arch_root, mode=mode, force=force)
+        if result.blocked and not force:
+            return False, f"HALT: {result.block_reason}"
+        n = len(result.findings)
+        if n == 0:
+            return True, ""
+        return True, f"INFO: code review: {n} finding(s) logged to governance/bugs.md"
+    except Exception as exc:
+        return True, f"WARN: code_review gate error ({exc}) — skipped"
+
+
 def _check_consistency_checker_gate(arch_root: Path, block_id: str, phase_id: str) -> tuple[bool, str]:
     """Run consistency-check gate if mode=corporate and checker is available."""
     import re
@@ -316,6 +347,17 @@ def close_block(
             results["halted"] = True
             return results
         results["consistency_check"] = "ok"
+
+    # block-180: code review gate
+    cr_ok, cr_msg = _check_code_review_gate(arch_root, block_id, phase, force)
+    if cr_msg.startswith("WARN") or cr_msg.startswith("INFO"):
+        print(f"  {cr_msg}")
+    elif not cr_ok:
+        print(f"  {cr_msg}")
+        results["code_review"] = "blocked"
+        results["halted"] = True
+        return results
+    results["code_review"] = "ok" if cr_ok else cr_msg
 
     # --- Step 2: STATE.md ---
     state_updates = {

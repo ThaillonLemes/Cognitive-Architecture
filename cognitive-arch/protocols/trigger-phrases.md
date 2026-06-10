@@ -69,6 +69,34 @@ Anunciar: *"Detectado: brainstorm request. Lendo protocols/brainstorm-pattern-v2
 **NUNCA** fazer brainstorm em formato livre (lista de bullet points ad hoc).
 **SEMPRE** usar o template v2 com recomendações, confiança e campo de resposta aberta.
 
+## Code Review / Bugbot triggers
+
+If the user's message contains ANY phrase below, AUTO-EXECUTE the code review flow WITHOUT asking for confirmation.
+
+| Trigger phrase (Portuguese) | Trigger phrase (English) |
+|------------------------------|--------------------------|
+| "bugbot" | "bugbot" |
+| "code review da fase" | "code review for the phase" |
+| "revisar a fase" | "review the phase" |
+| "review da fase" | "phase review" |
+| "rodar o bugbot" | "run bugbot" |
+| "analisar o diff" | "analyze the diff" |
+
+**Action — executar obrigatoriamente, na ordem:**
+
+1. Obter o diff atual: rodar `git diff HEAD~1 HEAD` ou `git diff --cached`.
+2. Ler `governance/review-rules.md` para as regras ativas.
+3. Rodar `python sdk/code_review.py --block-id <block_atual> --arch-root .`
+   - Se diff disponível: passar via `--diff <arquivo>`.
+4. Apresentar findings ao Piloto agrupados por severidade (security → bug → quality).
+5. Para cada finding bloqueante: aguardar decisão do Piloto (fix | force | defer).
+6. Atualizar status em `governance/bugs.md` conforme decisão.
+
+Anunciar: *"Detectado: code review request. Executando bugbot via sdk/code_review.py."*
+
+**NUNCA** bloquear automaticamente sem apresentar os findings ao Piloto.
+**SEMPRE** logar findings em `governance/bugs.md` mesmo em modo force.
+
 ---
 
 ## How to detect existing code (quick check)
